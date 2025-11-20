@@ -11,16 +11,20 @@ from pydantic import ValidationError
 
 from app.core.logging import setup_logging, get_logger
 from app.core.websocket_manager import connection_manager
-from app.schemas.config import RootConfig, LogLevel
+from app.core.orchestrator import ConversationOrchestrator
+from app.schemas.config import RootConfig, LogLevel, ModelConfig
 from app.services.config_manager import (
     load_config,
     save_config,
     validate_config_yaml,
 )
+from app.services.ollama_client import OllamaClient, OllamaConnectionError, OllamaModelNotFoundError
 
 # Global state
 app_state: Dict[str, Any] = {
     "config": None,
+    "orchestrator": None,
+    "conversation_running": False,
 }
 
 
@@ -309,6 +313,157 @@ async def websocket_status():
     """
     return {
         "active_connections": connection_manager.get_connection_count(),
+    }
+
+
+# Ollama testing endpoint
+@app.post("/api/ollama/test-connection")
+async def test_ollama_connection(model_config: ModelConfig):
+    """Test connection to an Ollama instance.
+    
+    Args:
+        model_config: Model configuration to test
+        
+    Returns:
+        Connection test result
+    """
+    try:
+        client = OllamaClient(model_config)
+        await client.verify_connection()
+        await client.close()
+        
+        return {
+            "status": "success",
+            "message": f"Successfully connected to {model_config.url} with model {model_config.model_name}",
+            "url": model_config.url,
+            "model": model_config.model_name
+        }
+        
+    except OllamaConnectionError as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "url": model_config.url
+        }
+    except OllamaModelNotFoundError as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "url": model_config.url,
+            "model": model_config.model_name
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Unexpected error: {str(e)}",
+            "url": model_config.url
+        }
+
+
+# Conversation management endpoints
+@app.post("/api/conversation/start")
+async def start_conversation():
+    """Start a new conversation.
+    
+    Returns:
+        Conversation metadata
+    """
+    if app_state["config"] is None:
+        raise HTTPException(status_code=400, detail="No configuration loaded")
+    
+    if app_state["conversation_running"]:
+        raise HTTPException(status_code=400, detail="Conversation already running")
+    
+    try:
+        logger = get_logger(__name__)
+        
+        # Create orchestrator
+        orchestrator = ConversationOrchestrator(
+            config=app_state["config"],
+            websocket_manager=connection_manager
+        )
+        
+        # Start conversation
+        metadata = await orchestrator.start_conversation()
+        
+        # Store orchestrator
+        app_state["orchestrator"] = orchestrator
+        app_state["conversation_running"] = True
+        
+        logger.info(f"Conversation started: {metadata['conversation_id']}")
+        
+        # Run conversation in background
+        import asyncio
+        asyncio.create_task(_run_conversation_background())
+        
+        return {
+            "status": "started",
+            **metadata
+        }
+        
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.error(f"Error starting conversation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _run_conversation_background():
+    """Run conversation in the background."""
+    logger = get_logger(__name__)
+    try:
+        orchestrator = app_state["orchestrator"]
+        if orchestrator:
+            final_state = await orchestrator.run_conversation()
+            logger.info("Conversation completed successfully")
+    except Exception as e:
+        logger.error(f"Error in conversation: {e}", exc_info=True)
+    finally:
+        app_state["conversation_running"] = False
+
+
+@app.post("/api/conversation/stop")
+async def stop_conversation():
+    """Stop the current conversation.
+    
+    Returns:
+        Stop result
+    """
+    if not app_state["conversation_running"]:
+        raise HTTPException(status_code=400, detail="No conversation running")
+    
+    # TODO: Implement graceful stop
+    app_state["conversation_running"] = False
+    app_state["orchestrator"] = None
+    
+    return {
+        "status": "stopped",
+        "message": "Conversation stopped"
+    }
+
+
+@app.get("/api/conversation/status")
+async def get_conversation_status():
+    """Get current conversation status.
+    
+    Returns:
+        Conversation status
+    """
+    orchestrator = app_state["orchestrator"]
+    
+    if orchestrator and app_state["conversation_running"]:
+        state = orchestrator.get_current_state()
+        if state:
+            return {
+                "running": True,
+                "current_cycle": state["current_cycle"],
+                "message_count": len(state["messages"]),
+                "should_terminate": state.get("should_terminate", False),
+                "termination_reason": state.get("termination_reason")
+            }
+    
+    return {
+        "running": False,
+        "message": "No conversation running"
     }
 
 
