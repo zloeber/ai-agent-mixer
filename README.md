@@ -1,4 +1,25 @@
-# Synthetic AI Conversation Orchestrator 
+# AI Agent Mixer - Synthetic AI Conversation Orchestrator 
+
+[![Phase 1](https://img.shields.io/badge/Phase%201-Complete-brightgreen.svg)](docs/PHASE1_COMPLETE.md)
+[![Backend](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](backend/)
+[![Frontend](https://img.shields.io/badge/Frontend-React%2BTypeScript-61DAFB.svg)](frontend/)
+
+## Quick Start
+
+```bash
+# Backend
+cd backend
+uv venv && source .venv/bin/activate
+uv pip install -e .
+uvicorn app.main:app --reload
+
+# Frontend (in another terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+Visit http://localhost:5173 to see the UI and http://localhost:8000/health for backend health check.
 
 ## Technical Summary & Purpose
 
@@ -98,3 +119,215 @@ This platform is designed for production use in research and development environ
 - Conversational AI safety research
 
 The architecture supports horizontal scaling via Redis-backed state management and is extensible to multi-agent scenarios beyond the initial two-agent design.
+
+---
+
+## Current Implementation Status
+
+### ✅ Phase 1: Foundation & Core Infrastructure (COMPLETE)
+
+All Phase 1 features have been successfully implemented:
+
+1. **Project Structure & Dependency Setup**
+   - Monorepo structure with backend (Python/FastAPI) and frontend (React/TypeScript)
+   - All dependencies installed and tested
+   - Docker support with docker-compose.yml
+
+2. **Configuration Schema & Pydantic Models**
+   - Complete Pydantic models for all configuration types
+   - JSON schema generation for IDE support
+   - Comprehensive validation
+
+3. **YAML Import/Export Service**
+   - Load/save configuration from YAML files
+   - Environment variable substitution
+   - Configuration validation with detailed errors
+
+4. **Basic FastAPI Application Skeleton**
+   - Health check and configuration endpoints
+   - CORS middleware for frontend
+   - JSON structured logging
+   - Global exception handling
+
+5. **React Three-Column Layout Shell**
+   - Responsive three-column layout (Agent A | Conversation | Agent B)
+   - Dark theme with TailwindCSS
+   - Shell components for all major UI sections
+
+6. **WebSocket Manager & Connection Handler**
+   - Backend WebSocket manager with connection pooling
+   - Frontend WebSocket service with auto-reconnection
+   - Heartbeat/ping-pong for connection monitoring
+
+See [Phase 1 Complete Documentation](docs/PHASE1_COMPLETE.md) for detailed information.
+
+### 🚧 Coming Next: Phase 2 - Agent Engine & LangGraph Integration
+
+- Ollama integration layer
+- Thought suppression callback mechanism
+- LangGraph state definition and orchestration
+- Agent node factory
+- Cycle detection and termination logic
+
+## Installation
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- uv (Python package manager)
+- Ollama (for running LLM models)
+
+### Backend Setup
+
+```bash
+cd backend
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv pip install -e .
+
+# Copy and configure environment
+cp .env.template .env
+# Edit .env with your settings
+
+# Run backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend Setup
+
+```bash
+cd frontend
+npm install
+
+# Copy and configure environment
+cp .env.template .env
+# Edit .env with your settings
+
+# Run frontend dev server
+npm run dev
+
+# Build for production
+npm run build
+```
+
+### Docker Setup
+
+```bash
+# Build and start all services
+docker-compose up --build
+
+# Access the application
+# Frontend: http://localhost:3000
+# Backend: http://localhost:8000
+```
+
+## Configuration
+
+### Sample Configuration
+
+A sample configuration is provided at `config/example-simple.yaml`:
+
+```yaml
+version: "1.0"
+conversation:
+  starting_agent: "agent_a"
+  max_cycles: 5
+  turn_timeout: 120
+
+agents:
+  agent_a:
+    name: "Agent A"
+    persona: "You are a friendly AI assistant"
+    model:
+      provider: "ollama"
+      url: "http://localhost:11434"
+      model_name: "llama2"
+      
+  agent_b:
+    name: "Agent B"
+    persona: "You are a knowledgeable AI assistant"
+    model:
+      provider: "ollama"
+      url: "http://localhost:11434"
+      model_name: "llama2"
+
+initialization:
+  first_message: "Hello! Let's have a conversation."
+
+logging:
+  level: "INFO"
+```
+
+## API Documentation
+
+### Backend Endpoints
+
+- `GET /health` - Health check
+- `GET /api/config/schema` - Get configuration JSON schema
+- `POST /api/config/import` - Import configuration from JSON
+- `GET /api/config/export` - Export current configuration
+- `POST /api/config/validate` - Validate YAML configuration
+- `POST /api/config/upload` - Upload YAML configuration file
+- `GET /api/ws/status` - WebSocket connection status
+- `WS /ws/{client_id}` - WebSocket endpoint for real-time updates
+
+### Testing
+
+```bash
+# Backend
+cd backend
+source .venv/bin/activate
+pytest
+
+# Frontend
+cd frontend
+npm test
+
+# End-to-end tests
+npm run test:e2e
+```
+
+## Development
+
+### Project Structure
+
+```
+ai-agent-mixer/
+├── backend/           # FastAPI backend
+│   ├── app/
+│   │   ├── schemas/   # Pydantic models
+│   │   ├── services/  # Business logic
+│   │   ├── core/      # Core infrastructure
+│   │   └── agents/    # Agent implementations
+│   └── tests/
+├── frontend/          # React frontend
+│   ├── src/
+│   │   ├── components/
+│   │   └── services/
+│   └── public/
+├── config/            # Configuration files
+├── docs/              # Documentation
+└── tests/             # Integration tests
+```
+
+### Contributing
+
+This project is developed following the specifications in `PROJECT_SPECS.md`. Each phase builds upon the previous one:
+
+1. Phase 1: Foundation & Core Infrastructure (✅ Complete)
+2. Phase 2: Agent Engine & LangGraph Integration (🚧 Next)
+3. Phase 3: MCP Server Integration
+4. Phase 4: Web Interface & Real-Time Features
+5. Phase 5: Testing, Polish & Deployment
+
+## License
+
+See LICENSE file for details.
+
+## Support
+
+For questions or issues:
+- Review the [Phase 1 Documentation](docs/PHASE1_COMPLETE.md)
+- Check [PROJECT_SPECS.md](PROJECT_SPECS.md) for detailed specifications
+- Open an issue on GitHub

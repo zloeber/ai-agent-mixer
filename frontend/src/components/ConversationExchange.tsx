@@ -10,8 +10,8 @@ interface Message {
 }
 
 const ConversationExchange: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [currentCycle, setCurrentCycle] = useState(0);
+  const [messages] = useState<Message[]>([]);
+  const [currentCycle] = useState(0);
 
   return (
     <div className="flex flex-col h-full bg-gray-800">

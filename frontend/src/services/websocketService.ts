@@ -20,7 +20,7 @@ class WebSocketService {
   private maxReconnectDelay = 30000; // Max 30 seconds
   private messageHandlers: Map<string, Set<MessageHandler>> = new Map();
   private isConnecting = false;
-  private heartbeatInterval: NodeJS.Timeout | null = null;
+  private heartbeatInterval: number | null = null;
   private heartbeatIntervalMs = 30000; // 30 seconds
 
   constructor() {
@@ -171,7 +171,7 @@ class WebSocketService {
   }
 
   private stopHeartbeat(): void {
-    if (this.heartbeatInterval) {
+    if (this.heartbeatInterval !== null) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
