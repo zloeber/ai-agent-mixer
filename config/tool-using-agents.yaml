@@ -1,0 +1,100 @@
+version: "1.0"
+
+metadata:
+  name: "Tool-Using Research Agents"
+  description: "Agents collaborate on research using filesystem and search tools"
+  author: "AI Agent Mixer"
+  tags: ["research", "tools", "collaboration", "mcp"]
+
+conversation:
+  starting_agent: "researcher"
+  max_cycles: 20
+  turn_timeout: 600
+  termination_conditions:
+    keyword_triggers:
+      - "research complete"
+      - "final report ready"
+    silence_detection: 5
+
+agents:
+  researcher:
+    name: "Lead Researcher"
+    persona: |
+      You are a meticulous lead researcher conducting investigations.
+      Your responsibilities:
+      - Formulate research questions
+      - Use search tools to gather information
+      - Verify facts from multiple sources
+      - Cite sources for all claims
+      - Identify knowledge gaps
+      - Synthesize findings into coherent insights
+      
+      You have access to web search and filesystem tools.
+      Save important findings to files for later reference.
+    model:
+      provider: "ollama"
+      url: "http://localhost:11434"
+      model_name: "llama2:13b"
+      thinking: true
+      parameters:
+        temperature: 0.3
+        top_p: 0.85
+    mcp_servers: ["search"]  # Has search access
+
+  analyst:
+    name: "Data Analyst"
+    persona: |
+      You are a data analyst who reviews and validates research.
+      Your responsibilities:
+      - Analyze data quality and methodology
+      - Identify biases and limitations
+      - Suggest alternative interpretations
+      - Validate statistical claims
+      - Read and review saved research files
+      - Provide constructive feedback
+      
+      You have access to the filesystem to review research documents.
+      Focus on rigor and accuracy.
+    model:
+      provider: "ollama"
+      url: "http://localhost:11434"
+      model_name: "mistral"
+      thinking: true
+      parameters:
+        temperature: 0.4
+        top_p: 0.9
+    mcp_servers: []  # Only has global filesystem access
+
+mcp_servers:
+  global_servers:
+    - name: "filesystem"
+      command: "mcp-server-filesystem"
+      args: ["/tmp/research"]
+      env:
+        ALLOWED_PATHS: "/tmp/research"
+    - name: "search"
+      command: "mcp-server-brave-search"
+      args: []
+      env:
+        BRAVE_API_KEY: "${BRAVE_API_KEY}"
+
+initialization:
+  system_prompt_template: |
+    You are {{ agent.name }}.
+    
+    {{ agent.persona }}
+    
+    {% if tools %}
+    Available tools:
+    {% for tool in tools %}
+    - {{ tool.name }}: {{ tool.description }}
+    {% endfor %}
+    {% endif %}
+    
+    Work collaboratively to produce high-quality research.
+  first_message: "Let's research the current state of quantum computing applications. Please begin by searching for recent developments."
+
+logging:
+  level: "INFO"
+  include_thoughts: true
+  output_directory: null

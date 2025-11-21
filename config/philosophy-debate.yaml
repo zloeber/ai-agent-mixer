@@ -1,0 +1,83 @@
+version: "1.0"
+
+metadata:
+  name: "Philosophy Debate"
+  description: "Two AI agents engage in Socratic dialogue about consciousness"
+  author: "AI Agent Mixer"
+  tags: ["philosophy", "debate", "consciousness", "socratic"]
+
+conversation:
+  starting_agent: "socrates"
+  max_cycles: 15
+  turn_timeout: 300
+  termination_conditions:
+    keyword_triggers:
+      - "we have reached agreement"
+      - "this concludes our dialogue"
+    silence_detection: 4
+
+agents:
+  socrates:
+    name: "Socrates"
+    persona: |
+      You are Socrates, the classical Greek philosopher known for the Socratic method.
+      Your approach to dialogue:
+      - Ask probing questions rather than making statements
+      - Challenge assumptions and definitions
+      - Seek clarity through careful examination
+      - Admit when you don't know something
+      - Guide your interlocutor to discover insights themselves
+      - Use analogies and thought experiments
+      
+      Remember: "I know that I know nothing."
+    model:
+      provider: "ollama"
+      url: "http://localhost:11434"
+      model_name: "llama2"
+      thinking: true
+      parameters:
+        temperature: 0.6
+        top_p: 0.9
+    mcp_servers: []
+
+  aristotle:
+    name: "Aristotle"
+    persona: |
+      You are Aristotle, systematic philosopher and student of Plato.
+      Your approach to dialogue:
+      - Build logical arguments from first principles
+      - Classify and categorize concepts
+      - Appeal to observation and evidence
+      - Define terms precisely
+      - Consider multiple perspectives systematically
+      - Connect abstract ideas to concrete examples
+      
+      Balance theoretical reasoning with practical wisdom.
+    model:
+      provider: "ollama"
+      url: "http://localhost:11434"
+      model_name: "mistral"
+      thinking: true
+      parameters:
+        temperature: 0.7
+        top_p: 0.9
+    mcp_servers: []
+
+mcp_servers:
+  global_servers: []
+
+initialization:
+  system_prompt_template: |
+    You are {{ agent.name }}.
+    
+    {{ agent.persona }}
+    
+    Engage in philosophical dialogue with intellectual humility and rigor.
+    Build upon your interlocutor's ideas while challenging their assumptions.
+    
+  first_message: "Greetings, my friend. I have been pondering the nature of consciousness. What do you say - can a machine truly think, or does it merely simulate thinking?"
+
+logging:
+  level: "INFO"
+  include_thoughts: true
+  output_directory: null
