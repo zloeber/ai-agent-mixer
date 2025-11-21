@@ -1,5 +1,6 @@
 """Conversation orchestrator using LangGraph for multi-agent conversations."""
 
+import asyncio
 import logging
 from typing import Any, Callable, Dict, List, Literal, Optional
 
@@ -11,6 +12,8 @@ from .state import ConversationState, ConversationStateManager
 from ..agents.agent_node import create_agent_node
 from ..schemas.config import RootConfig
 from ..services.initializer import ConversationInitializer
+from ..services.mcp_manager import get_mcp_manager
+from ..services.tool_adapter import get_tools_for_agent_as_langchain
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +55,52 @@ class ConversationOrchestrator:
         # Build the graph
         self.graph = None
         self.checkpointer = MemorySaver()  # For state persistence
+        self.agent_tools: Dict[str, List[Any]] = {}  # Tools for each agent
         self._build_graph()
         
         logger.info(f"ConversationOrchestrator initialized with {len(config.agents)} agents")
+    
+    async def _initialize_agent_mcp_servers(self) -> None:
+        """Initialize MCP servers for each agent."""
+        mcp_manager = get_mcp_manager()
+        
+        for agent_id, agent_config in self.config.agents.items():
+            if agent_config.mcp_servers:
+                logger.info(f"Starting {len(agent_config.mcp_servers)} MCP servers for agent {agent_id}")
+                for server_name in agent_config.mcp_servers:
+                    # Find the server config - check if it's a global server first
+                    server_config = None
+                    for global_server in self.config.mcp_servers.global_servers:
+                        if global_server.name == server_name:
+                            # This is a reference to a global server, skip
+                            logger.debug(f"Agent {agent_id} references global server {server_name}")
+                            continue
+                    
+                    # If not found in global, it might be defined elsewhere or should be agent-scoped
+                    # For now, we'll log a warning if not found
+                    if not server_config:
+                        logger.warning(f"MCP server {server_name} referenced by agent {agent_id} but not found in configuration")
+    
+    async def _load_agent_tools(self) -> None:
+        """Load tools for each agent from MCP servers."""
+        mcp_manager = get_mcp_manager()
+        
+        for agent_id, agent_config in self.config.agents.items():
+            # Get global server names
+            global_server_names = [s.name for s in self.config.mcp_servers.global_servers]
+            
+            # Get agent-specific server names
+            agent_server_names = agent_config.mcp_servers
+            
+            # Get tools as LangChain BaseTool instances
+            tools = await get_tools_for_agent_as_langchain(
+                agent_id=agent_id,
+                global_server_names=global_server_names,
+                agent_server_names=agent_server_names
+            )
+            
+            self.agent_tools[agent_id] = tools
+            logger.info(f"Loaded {len(tools)} tools for agent {agent_id}")
     
     def _build_graph(self) -> None:
         """Build the LangGraph workflow."""
@@ -65,15 +111,19 @@ class ConversationOrchestrator:
         
         # Add agent nodes
         for agent_id, agent_config in self.config.agents.items():
+            # Get tools for this agent (may be empty initially)
+            tools = self.agent_tools.get(agent_id, [])
+            
             node_func = create_agent_node(
                 agent_id=agent_id,
                 agent_config=agent_config,
                 turn_timeout=self.config.conversation.turn_timeout,
                 websocket_manager=self.websocket_manager,
-                thought_callback=self.thought_callback
+                thought_callback=self.thought_callback,
+                tools=tools
             )
             workflow.add_node(agent_id, node_func)
-            logger.debug(f"Added agent node: {agent_id}")
+            logger.debug(f"Added agent node: {agent_id} with {len(tools)} tools")
         
         # Add cycle check node
         workflow.add_node("cycle_check", self._cycle_check_node)
@@ -196,6 +246,17 @@ class ConversationOrchestrator:
         
         # Validate configuration
         self.initializer.validate_configuration()
+        
+        # Initialize agent MCP servers if needed
+        await self._initialize_agent_mcp_servers()
+        
+        # Load tools for agents
+        await self._load_agent_tools()
+        
+        # Rebuild graph with tools (only if tools were loaded)
+        if any(len(tools) > 0 for tools in self.agent_tools.values()):
+            logger.info("Rebuilding graph with loaded tools")
+            self._build_graph()
         
         # Create initial state
         initial_state = self.initializer.create_initial_state()

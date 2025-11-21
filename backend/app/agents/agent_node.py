@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.tools import BaseTool
 
 from ..core.callbacks import ThoughtSuppressingCallback, ConversationLoggingCallback
 from ..core.state import AgentMessage, ConversationState, ConversationStateManager
@@ -25,7 +26,8 @@ def create_agent_node(
     agent_config: AgentConfig,
     turn_timeout: int = 300,
     websocket_manager: Optional[Any] = None,
-    thought_callback: Optional[Callable[[str, str], None]] = None
+    thought_callback: Optional[Callable[[str, str], None]] = None,
+    tools: Optional[List[BaseTool]] = None
 ) -> Callable[[ConversationState], ConversationState]:
     """
     Create a LangGraph-compatible node for an agent.
@@ -36,6 +38,7 @@ def create_agent_node(
     3. Handles thought suppression if enabled
     4. Returns properly attributed messages
     5. Enforces turn timeout
+    6. Supports tool calling if tools are provided
     
     Args:
         agent_id: Unique identifier for the agent
@@ -43,12 +46,18 @@ def create_agent_node(
         turn_timeout: Maximum seconds for agent to respond
         websocket_manager: Optional WebSocket manager for real-time updates
         thought_callback: Optional callback for thought messages
+        tools: Optional list of tools available to the agent
         
     Returns:
         Callable node function compatible with LangGraph
     """
     # Create Ollama client for this agent
     ollama_client = OllamaClient(agent_config.model)
+    
+    # Bind tools to the client if provided
+    if tools:
+        logger.info(f"Binding {len(tools)} tools to agent {agent_id}")
+        ollama_client.bind_tools(tools)
     
     async def agent_node(state: ConversationState) -> ConversationState:
         """
