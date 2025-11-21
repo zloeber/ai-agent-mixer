@@ -58,3 +58,11 @@ Thumbs.db
 *.pyc
 *.pyo
 backend/.coverage
+backend/coverage.json
+
+# Test artifacts
+backend/htmlcov/
+backend/.pytest_cache/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.playwright/
