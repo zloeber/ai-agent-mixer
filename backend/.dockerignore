@@ -40,8 +40,8 @@ Thumbs.db
 
 # Documentation
 docs/
-*.md
-README*
+# *.md
+# README*
 
 # Logs
 *.log

@@ -1,5 +1,5 @@
 # Multi-stage build for AI Agent Mixer Frontend
-FROM node:18-alpine as builder
+FROM node:25-alpine as builder
 
 # Set working directory
 WORKDIR /build

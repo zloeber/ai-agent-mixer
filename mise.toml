@@ -1,0 +1,6 @@
+[tools]
+task = 'latest'
+jq = 'latest'
+node = 'latest'
+pnpm = 'latest'
+bun = "latest"
