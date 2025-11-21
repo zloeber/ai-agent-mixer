@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -12,6 +12,15 @@ from pydantic import ValidationError
 from app.core.logging import setup_logging, get_logger
 from app.core.websocket_manager import connection_manager
 from app.core.orchestrator import ConversationOrchestrator
+from app.core.exceptions import (
+    AIAgentMixerException,
+    ConfigurationError,
+    InvalidConfigError,
+    OllamaConnectionError,
+    OllamaModelNotFoundError,
+    MCPServerError,
+    AgentExecutionError,
+)
 from app.schemas.config import RootConfig, LogLevel, ModelConfig
 from app.services.config_manager import (
     load_config,
@@ -27,6 +36,13 @@ app_state: Dict[str, Any] = {
     "orchestrator": None,
     "conversation_running": False,
     "conversation_paused": False,
+    "metrics": {
+        "requests_total": 0,
+        "requests_errors": 0,
+        "conversations_started": 0,
+        "conversations_completed": 0,
+        "websocket_connections_total": 0,
+    }
 }
 
 
@@ -98,7 +114,56 @@ app.add_middleware(
 )
 
 
+# Middleware to track metrics
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    """Middleware to track request metrics."""
+    app_state["metrics"]["requests_total"] += 1
+    
+    try:
+        response = await call_next(request)
+        if response.status_code >= 400:
+            app_state["metrics"]["requests_errors"] += 1
+        return response
+    except Exception as e:
+        app_state["metrics"]["requests_errors"] += 1
+        raise
+
+
 # Global exception handlers
+@app.exception_handler(AIAgentMixerException)
+async def custom_exception_handler(request: Request, exc: AIAgentMixerException):
+    """Handle custom application exceptions."""
+    logger = get_logger(__name__)
+    logger.error(
+        f"Application error: {exc.message}",
+        extra={"details": exc.details, "status_code": exc.status_code}
+    )
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.__class__.__name__,
+            "message": exc.message,
+            "details": exc.details,
+        }
+    )
+
+
+@app.exception_handler(ConfigurationError)
+async def configuration_error_handler(request: Request, exc: ConfigurationError):
+    """Handle configuration errors."""
+    logger = get_logger(__name__)
+    logger.error(f"Configuration error: {exc.message}", extra={"details": exc.details})
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": "ConfigurationError",
+            "message": exc.message,
+            "details": exc.details,
+        }
+    )
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request, exc: ValidationError):
     """Handle Pydantic validation errors."""
@@ -136,6 +201,67 @@ async def health_check():
         "status": "healthy",
         "config_loaded": app_state["config"] is not None,
     }
+
+
+# Metrics endpoint for monitoring
+@app.get("/metrics")
+async def metrics():
+    """
+    Prometheus-compatible metrics endpoint.
+    
+    Returns:
+        Application metrics in Prometheus text format
+    """
+    metrics_data = app_state["metrics"]
+    mcp_manager = get_mcp_manager()
+    mcp_statuses = await mcp_manager.get_all_statuses()
+    
+    # Calculate derived metrics
+    healthy_servers = sum(1 for s in mcp_statuses.values() if s.healthy)
+    total_servers = len(mcp_statuses)
+    
+    # Format as Prometheus metrics
+    metrics_text = f"""# HELP requests_total Total number of HTTP requests
+# TYPE requests_total counter
+requests_total {metrics_data['requests_total']}
+
+# HELP requests_errors Total number of HTTP errors
+# TYPE requests_errors counter
+requests_errors {metrics_data['requests_errors']}
+
+# HELP conversations_started Total number of conversations started
+# TYPE conversations_started counter
+conversations_started {metrics_data['conversations_started']}
+
+# HELP conversations_completed Total number of conversations completed
+# TYPE conversations_completed counter
+conversations_completed {metrics_data['conversations_completed']}
+
+# HELP websocket_connections_active Current active WebSocket connections
+# TYPE websocket_connections_active gauge
+websocket_connections_active {connection_manager.get_connection_count()}
+
+# HELP websocket_connections_total Total WebSocket connections
+# TYPE websocket_connections_total counter
+websocket_connections_total {metrics_data['websocket_connections_total']}
+
+# HELP mcp_servers_total Total number of MCP servers
+# TYPE mcp_servers_total gauge
+mcp_servers_total {total_servers}
+
+# HELP mcp_servers_healthy Number of healthy MCP servers
+# TYPE mcp_servers_healthy gauge
+mcp_servers_healthy {healthy_servers}
+
+# HELP conversation_running Whether a conversation is currently running
+# TYPE conversation_running gauge
+conversation_running {1 if app_state['conversation_running'] else 0}
+"""
+    
+    return JSONResponse(
+        content=metrics_text,
+        media_type="text/plain; version=0.0.4"
+    )
 
 
 # Configuration endpoints
@@ -314,6 +440,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     """
     await connection_manager.connect(client_id, websocket)
     logger = get_logger(__name__)
+    app_state["metrics"]["websocket_connections_total"] += 1
     
     try:
         # Send welcome message
@@ -443,6 +570,7 @@ async def start_conversation():
         # Store orchestrator
         app_state["orchestrator"] = orchestrator
         app_state["conversation_running"] = True
+        app_state["metrics"]["conversations_started"] += 1
         
         logger.info(f"Conversation started: {metadata['conversation_id']}")
         
@@ -468,6 +596,7 @@ async def _run_conversation_background():
         orchestrator = app_state["orchestrator"]
         if orchestrator:
             final_state = await orchestrator.run_conversation()
+            app_state["metrics"]["conversations_completed"] += 1
             logger.info("Conversation completed successfully")
     except Exception as e:
         logger.error(f"Error in conversation: {e}", exc_info=True)
