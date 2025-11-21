@@ -19,6 +19,7 @@ from app.services.config_manager import (
     validate_config_yaml,
 )
 from app.services.ollama_client import OllamaClient, OllamaConnectionError, OllamaModelNotFoundError
+from app.services.mcp_manager import get_mcp_manager
 
 # Global state
 app_state: Dict[str, Any] = {
@@ -41,10 +42,34 @@ async def lifespan(app: FastAPI):
     # Initialize default logging
     setup_logging(LogLevel.INFO)
     
+    # Initialize MCP manager
+    mcp_manager = get_mcp_manager()
+    logger.info("MCP Manager initialized")
+    
+    # Start global MCP servers if config is loaded
+    if app_state.get("config"):
+        config = app_state["config"]
+        global_servers = config.mcp_servers.global_servers
+        if global_servers:
+            logger.info(f"Starting {len(global_servers)} global MCP servers")
+            for server_config in global_servers:
+                try:
+                    await mcp_manager.start_server(server_config)
+                    logger.info(f"Started global MCP server: {server_config.name}")
+                except Exception as e:
+                    logger.error(f"Failed to start global MCP server {server_config.name}: {e}")
+            
+            # Start health monitoring
+            await mcp_manager.start_health_monitoring()
+    
     yield
     
     # Shutdown
     logger.info("Shutting down AI Agent Mixer backend...")
+    
+    # Stop all MCP servers
+    await mcp_manager.stop_all_servers()
+    logger.info("All MCP servers stopped")
 
 
 # Create FastAPI app
@@ -139,11 +164,39 @@ async def import_config(config_dict: Dict[str, Any]):
         logger = get_logger(__name__)
         logger.info("Configuration imported successfully")
         
+        # Start global MCP servers
+        mcp_manager = get_mcp_manager()
+        global_servers = config.mcp_servers.global_servers
+        started_servers = []
+        failed_servers = []
+        
+        if global_servers:
+            logger.info(f"Starting {len(global_servers)} global MCP servers")
+            for server_config in global_servers:
+                try:
+                    success = await mcp_manager.start_server(server_config)
+                    if success:
+                        started_servers.append(server_config.name)
+                        logger.info(f"Started global MCP server: {server_config.name}")
+                    else:
+                        failed_servers.append(server_config.name)
+                except Exception as e:
+                    failed_servers.append(server_config.name)
+                    logger.error(f"Failed to start global MCP server {server_config.name}: {e}")
+            
+            # Start health monitoring if not already running
+            await mcp_manager.start_health_monitoring()
+        
         return {
             "status": "success",
             "message": "Configuration imported successfully",
             "agents": list(config.agents.keys()),
             "starting_agent": config.conversation.starting_agent,
+            "mcp_servers": {
+                "started": started_servers,
+                "failed": failed_servers,
+                "total": len(global_servers)
+            }
         }
         
     except ValidationError as e:
@@ -464,6 +517,170 @@ async def get_conversation_status():
     return {
         "running": False,
         "message": "No conversation running"
+    }
+
+
+# MCP Server Management endpoints
+@app.get("/api/mcp/status")
+async def get_mcp_status():
+    """Get status of all MCP servers.
+    
+    Returns:
+        Dictionary of server names to their status
+    """
+    mcp_manager = get_mcp_manager()
+    statuses = await mcp_manager.get_all_statuses()
+    
+    return {
+        "servers": {
+            name: {
+                "running": status.running,
+                "healthy": status.healthy,
+                "started_at": status.started_at.isoformat() if status.started_at else None,
+                "error_message": status.error_message,
+                "tools_count": len(status.tools_available),
+                "tools": status.tools_available
+            }
+            for name, status in statuses.items()
+        },
+        "total_servers": len(statuses),
+        "healthy_servers": sum(1 for s in statuses.values() if s.healthy)
+    }
+
+
+@app.get("/api/mcp/servers/{server_name}/status")
+async def get_server_status(server_name: str):
+    """Get status of a specific MCP server.
+    
+    Args:
+        server_name: Name of the server
+        
+    Returns:
+        Server status details
+    """
+    mcp_manager = get_mcp_manager()
+    status = await mcp_manager.get_server_status(server_name)
+    
+    if not status:
+        raise HTTPException(status_code=404, detail=f"MCP server {server_name} not found")
+    
+    return {
+        "name": status.name,
+        "running": status.running,
+        "healthy": status.healthy,
+        "started_at": status.started_at.isoformat() if status.started_at else None,
+        "error_message": status.error_message,
+        "tools_count": len(status.tools_available),
+        "tools": status.tools_available
+    }
+
+
+@app.post("/api/mcp/servers/{server_name}/restart")
+async def restart_server(server_name: str):
+    """Restart a specific MCP server.
+    
+    Args:
+        server_name: Name of the server
+        
+    Returns:
+        Restart result
+    """
+    logger = get_logger(__name__)
+    mcp_manager = get_mcp_manager()
+    
+    try:
+        success = await mcp_manager.restart_server(server_name)
+        
+        if success:
+            logger.info(f"MCP server {server_name} restarted successfully")
+            return {
+                "status": "success",
+                "message": f"Server {server_name} restarted successfully"
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to restart server {server_name}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error restarting MCP server {server_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/mcp/tools")
+async def get_all_tools():
+    """Get all available tools from all MCP servers.
+    
+    Returns:
+        List of all available tools with their metadata
+    """
+    mcp_manager = get_mcp_manager()
+    
+    all_tools = []
+    servers = mcp_manager.get_all_servers()
+    
+    for server_name, instance in servers.items():
+        if instance.healthy and instance.session:
+            try:
+                tools_result = await instance.session.list_tools()
+                for tool in tools_result.tools:
+                    all_tools.append({
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "server": server_name,
+                        "input_schema": tool.inputSchema
+                    })
+            except Exception as e:
+                logger = get_logger(__name__)
+                logger.error(f"Error listing tools from server {server_name}: {e}")
+    
+    return {
+        "tools": all_tools,
+        "total_count": len(all_tools)
+    }
+
+
+@app.get("/api/mcp/agents/{agent_id}/tools")
+async def get_agent_tools(agent_id: str):
+    """Get all tools available to a specific agent.
+    
+    Args:
+        agent_id: ID of the agent
+        
+    Returns:
+        List of tools available to the agent
+    """
+    if not app_state.get("config"):
+        raise HTTPException(status_code=404, detail="No configuration loaded")
+    
+    config = app_state["config"]
+    
+    if agent_id not in config.agents:
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id} not found")
+    
+    agent_config = config.agents[agent_id]
+    mcp_manager = get_mcp_manager()
+    
+    # Get global server names
+    global_server_names = [s.name for s in config.mcp_servers.global_servers]
+    
+    # Get agent-specific server names
+    agent_server_names = agent_config.mcp_servers
+    
+    # Get tools
+    tools = await mcp_manager.get_tools_for_agent(
+        agent_id=agent_id,
+        global_server_names=global_server_names,
+        agent_server_names=agent_server_names
+    )
+    
+    return {
+        "agent_id": agent_id,
+        "tools": tools,
+        "total_count": len(tools),
+        "global_servers": global_server_names,
+        "agent_servers": agent_server_names
     }
 
 

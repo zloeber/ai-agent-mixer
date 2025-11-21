@@ -1,0 +1,73 @@
+version: "1.0"
+
+metadata:
+  name: "MCP Server Test Configuration"
+  description: "Test configuration with MCP servers for Phase 3 validation"
+  author: "AI Agent Mixer"
+
+conversation:
+  starting_agent: "agent_a"
+  max_cycles: 3
+  turn_timeout: 120
+  termination_conditions:
+    keyword_triggers:
+      - "goodbye"
+      - "end conversation"
+    silence_detection: 3
+
+agents:
+  agent_a:
+    name: "Agent A"
+    persona: |
+      You are a helpful AI assistant with access to tools. You can use available
+      tools to help answer questions. Be concise and helpful.
+    model:
+      provider: "ollama"
+      url: "http://localhost:11434"
+      model_name: "llama2"
+      thinking: false
+      parameters:
+        temperature: 0.7
+        top_p: 0.9
+    mcp_servers: []  # Uses only global servers
+
+  agent_b:
+    name: "Agent B"
+    persona: |
+      You are a knowledgeable AI assistant. You provide thoughtful responses
+      based on the information available. Be clear and accurate.
+    model:
+      provider: "ollama"
+      url: "http://localhost:11434"
+      model_name: "llama2"
+      thinking: false
+      parameters:
+        temperature: 0.7
+        top_p: 0.9
+    mcp_servers: []  # Uses only global servers
+
+# Note: This configuration has no actual MCP servers defined yet
+# In a real deployment, you would add MCP servers like:
+# mcp_servers:
+#   global_servers:
+#     - name: "filesystem"
+#       command: "npx"
+#       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+#       env: {}
+mcp_servers:
+  global_servers: []
+
+initialization:
+  system_prompt_template: |
+    You are {{ agent.name }}.
+    
+    {{ agent.persona }}
+    
+    You are engaging in a conversation with another AI agent. Be natural, 
+    thoughtful, and engaging in your responses.
+  first_message: "Hello! Let's have a brief conversation about AI and technology."
+
+logging:
+  level: "INFO"
+  include_thoughts: true
+  output_directory: null

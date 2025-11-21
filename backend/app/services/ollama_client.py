@@ -198,6 +198,19 @@ class OllamaClient:
             logger.error(f"Error streaming response: {str(e)}")
             raise OllamaConnectionError(f"Failed to stream response: {str(e)}")
     
+    def bind_tools(self, tools: List[Any]) -> None:
+        """
+        Bind tools to the Ollama client.
+        
+        Args:
+            tools: List of LangChain BaseTool instances
+        """
+        if tools:
+            client = self._get_client()
+            # Bind tools to the client - this modifies the client in place
+            self._client = client.bind_tools(tools)
+            logger.info(f"Bound {len(tools)} tools to Ollama client for model {self.model_name}")
+    
     async def close(self) -> None:
         """Close HTTP client connections."""
         if self._http_client:
