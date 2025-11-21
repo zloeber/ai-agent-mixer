@@ -11,8 +11,8 @@ test.describe('Configuration Panel', () => {
     if (await configButton.isVisible()) {
       await configButton.click();
       
-      // Wait a bit for panel to open
-      await page.waitForTimeout(500);
+      // Wait for any animations or transitions to complete
+      await page.waitForLoadState('networkidle');
     }
   });
 
@@ -84,8 +84,9 @@ test.describe('WebSocket Connection', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    // Wait a bit for connection attempt
-    await page.waitForTimeout(2000);
+    // Wait for any WebSocket connection attempt to complete
+    // Use a network idle state rather than arbitrary timeout
+    await page.waitForLoadState('networkidle');
     
     // WebSocket connection may or may not succeed without backend running
     // Just verify the page loaded
@@ -125,8 +126,10 @@ test.describe('Error Handling', () => {
           // Ignore click errors
         });
         
-        // Wait a bit for any side effects
-        await page.waitForTimeout(1000);
+        // Wait for any side effects to complete
+        await page.waitForLoadState('networkidle').catch(() => {
+          // Ignore if already in idle state
+        });
       }
       
       // Page should still be functional
