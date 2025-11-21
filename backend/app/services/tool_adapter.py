@@ -88,7 +88,8 @@ class MCPAdapterTool(BaseTool):
                 
         except Exception as e:
             logger.error(f"Error executing MCP tool {self.tool_name}: {e}")
-            return f"Error executing tool: {str(e)}"
+            # Return sanitized error message (don't leak sensitive details)
+            return f"Error executing tool: Tool execution failed"
 
 
 def create_langchain_tool_from_mcp(
@@ -146,6 +147,8 @@ async def get_tools_for_agent_as_langchain(
     
     # Convert to LangChain tools
     langchain_tools = []
+    failed_tools = []
+    
     for tool_meta in tools_metadata:
         try:
             tool = create_langchain_tool_from_mcp(
@@ -157,6 +160,10 @@ async def get_tools_for_agent_as_langchain(
             langchain_tools.append(tool)
         except Exception as e:
             logger.error(f"Error creating LangChain tool for {tool_meta['name']}: {e}")
+            failed_tools.append(tool_meta['name'])
+    
+    if failed_tools:
+        logger.warning(f"Failed to create {len(failed_tools)} tools for agent {agent_id}: {failed_tools}")
     
     logger.info(f"Created {len(langchain_tools)} LangChain tools for agent {agent_id}")
     return langchain_tools

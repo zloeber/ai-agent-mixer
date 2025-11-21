@@ -66,20 +66,12 @@ class ConversationOrchestrator:
         
         for agent_id, agent_config in self.config.agents.items():
             if agent_config.mcp_servers:
-                logger.info(f"Starting {len(agent_config.mcp_servers)} MCP servers for agent {agent_id}")
-                for server_name in agent_config.mcp_servers:
-                    # Find the server config - check if it's a global server first
-                    server_config = None
-                    for global_server in self.config.mcp_servers.global_servers:
-                        if global_server.name == server_name:
-                            # This is a reference to a global server, skip
-                            logger.debug(f"Agent {agent_id} references global server {server_name}")
-                            continue
-                    
-                    # If not found in global, it might be defined elsewhere or should be agent-scoped
-                    # For now, we'll log a warning if not found
-                    if not server_config:
-                        logger.warning(f"MCP server {server_name} referenced by agent {agent_id} but not found in configuration")
+                logger.info(f"Agent {agent_id} references {len(agent_config.mcp_servers)} MCP servers")
+                # Note: Agent-scoped MCP servers are currently only supported through
+                # global server references. Future enhancement could allow defining
+                # agent-specific server configurations directly in the agent config.
+                # For now, agent_config.mcp_servers should contain names of global servers
+                # that the agent wants to use.
     
     async def _load_agent_tools(self) -> None:
         """Load tools for each agent from MCP servers."""

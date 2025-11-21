@@ -16,6 +16,12 @@ from ..schemas.config import MCPServerConfig
 logger = logging.getLogger(__name__)
 
 
+# Configuration constants
+DEFAULT_HEALTH_CHECK_INTERVAL = 30  # seconds
+DEFAULT_RESTART_DELAY = 1  # seconds
+PROCESS_TERMINATION_TIMEOUT = 5  # seconds
+
+
 @dataclass
 class MCPServerStatus:
     """Status information for an MCP server."""
@@ -129,7 +135,7 @@ class MCPServerInstance:
         """Restart the MCP server."""
         logger.info(f"Restarting MCP server: {self.config.name}")
         await self.stop()
-        await asyncio.sleep(1)  # Brief pause before restart
+        await asyncio.sleep(DEFAULT_RESTART_DELAY)  # Brief pause before restart
         return await self.start()
     
     def get_status(self) -> MCPServerStatus:
@@ -161,9 +167,21 @@ class MCPManager:
         
         self.active_servers: Dict[str, MCPServerInstance] = {}
         self._health_check_task: Optional[asyncio.Task] = None
-        self._health_check_interval: int = 30  # seconds
+        self._health_check_interval: int = DEFAULT_HEALTH_CHECK_INTERVAL
         self._initialized = True
         logger.info("MCPManager initialized")
+    
+    def set_health_check_interval(self, interval: int) -> None:
+        """
+        Set the health check interval.
+        
+        Args:
+            interval: Interval in seconds between health checks
+        """
+        if interval < 5:
+            raise ValueError("Health check interval must be at least 5 seconds")
+        self._health_check_interval = interval
+        logger.info(f"Health check interval set to {interval} seconds")
     
     async def start_server(self, config: MCPServerConfig) -> bool:
         """Start a new MCP server."""
