@@ -4,25 +4,156 @@
 [![Phase 2](https://img.shields.io/badge/Phase%202-Complete-brightgreen.svg)](PHASE2_SUMMARY.md)
 [![Backend](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](backend/)
 [![Frontend](https://img.shields.io/badge/Frontend-React%2BTypeScript-61DAFB.svg)](frontend/)
+[![Tests](https://img.shields.io/badge/Tests-91%20passing-brightgreen.svg)](backend/tests/)
 
-## Quick Start
+A web-based platform for designing, executing, and monitoring structured conversations between configurable AI agents. Built on LangGraph and Ollama, it enables multi-agent interaction experiments, persona testing, and tool integration validation through declarative YAML configuration.
+
+## ✨ Key Features
+
+- 🤖 **Multi-Agent Orchestration**: Structured turn-taking with configurable termination conditions
+- 🎭 **Dynamic Personas**: Custom system prompts and behavioral constraints per agent
+- 🔧 **MCP Tool Integration**: Global and agent-scoped external capabilities via Model Context Protocol
+- 💭 **Thought Isolation**: Separate internal reasoning from external responses
+- 📊 **Real-Time Observability**: WebSocket streaming of thoughts, responses, and execution telemetry
+- 📝 **YAML Configuration**: Version-controlled, declarative conversation definitions
+- 🐳 **Docker Ready**: Production containerization with health checks and monitoring
+- 📈 **Prometheus Metrics**: Built-in observability for monitoring and alerting
+
+## 🚀 Quick Start (5 minutes)
+
+### Prerequisites
+
+- **Python 3.11+** (for backend)
+- **Node.js 18+** (for frontend)
+- **Ollama** running locally or remotely ([Install Ollama](https://ollama.ai/download))
+- Ollama models pulled: `ollama pull llama2` and `ollama pull mistral`
+
+### Option 1: Local Development
+
+```bash
+# 1. Clone repository
+git clone https://github.com/zloeber/ai-agent-mixer.git
+cd ai-agent-mixer
+
+# 2. Start backend
+cd backend
+pip install -e ".[dev]"
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# 3. Start frontend (new terminal)
+cd ../frontend
+npm install
+npm run dev
+
+# 4. Open browser
+# Frontend: http://localhost:5173
+# API Docs: http://localhost:8000/docs
+```
+
+### Option 2: Docker Compose
+
+```bash
+# 1. Set environment variables (if using MCP tools)
+export BRAVE_API_KEY="your-api-key"  # Optional
+
+# 2. Start all services
+docker-compose up --build
+
+# 3. Open browser
+# Frontend: http://localhost:3000
+# Backend: http://localhost:8000
+```
+
+## 📖 First Conversation
+
+1. **Load Example Configuration**
+   - Click "Import Config" in the UI
+   - Select `config/example-simple.yaml`
+   - Or upload via API: `curl -F "file=@config/example-simple.yaml" http://localhost:8000/api/config/upload`
+
+2. **Verify Configuration**
+   - Check "Configuration" panel shows 2 agents
+   - Verify Ollama connections: Green indicators for both agents
+
+3. **Start Conversation**
+   - Click "Start Conversation"
+   - Watch real-time messages in center panel
+   - Monitor agent thoughts in left/right consoles (if `thinking: true`)
+
+4. **Export Results**
+   - Click "Export Conversation" to save as Markdown
+   - View metrics at `http://localhost:8000/metrics`
+
+## 📚 Documentation
+
+- **[Architecture Overview](docs/architecture.md)** - System design, components, and data flow
+- **[Configuration Guide](docs/configuration-guide.md)** - Complete YAML reference with examples
+- **[API Reference](docs/api.md)** - REST and WebSocket endpoint documentation
+- **[Development Guides](docs/)** - Phase summaries and implementation details
+
+## 🎯 Example Configurations
+
+### Simple Two-Agent Conversation
+```yaml
+# config/example-simple.yaml
+version: "1.0"
+conversation:
+  starting_agent: "agent_a"
+  max_cycles: 5
+agents:
+  agent_a:
+    name: "Agent A"
+    persona: "You are friendly and curious."
+    model:
+      url: "http://localhost:11434"
+      model_name: "llama2"
+  agent_b:
+    name: "Agent B"
+    persona: "You are knowledgeable and patient."
+    model:
+      url: "http://localhost:11434"
+      model_name: "llama2"
+initialization:
+  first_message: "Hello! Let's discuss artificial intelligence."
+```
+
+More examples in `config/` directory:
+- `philosophy-debate.yaml` - Socratic dialogue between philosophers
+- `tool-using-agents.yaml` - Research agents with MCP tools
+- `example-with-mcp-placeholder.yaml` - Full MCP integration example
+
+## 🛠️ Development
+
+### Running Tests
+
+```bash
+cd backend
+pytest tests/ -v                      # Run all tests (91 tests)
+pytest tests/test_config_manager.py   # Config tests (38 tests)
+pytest tests/test_conversation_flow.py # Integration tests (26 tests)
+pytest --cov=app --cov-report=term   # With coverage
+```
+
+### Code Quality
+
+```bash
+# Linting
+ruff check app/
+black app/ --check
+
+# Type checking
+mypy app/
+```
+
+### Building Docker Images
 
 ```bash
 # Backend
-cd backend
-uv venv && source .venv/bin/activate
-uv pip install -e .
-uvicorn app.main:app --reload
+docker build -t ai-agent-mixer-backend:latest ./backend
 
-# Frontend (in another terminal)
-cd frontend
-npm install
-npm run dev
+# Frontend
+docker build -t ai-agent-mixer-frontend:latest ./frontend
 ```
-
-Visit http://localhost:5173 to see the UI and http://localhost:8000/health for backend health check.
-
-## Technical Summary & Purpose
 
 ## Project Overview
 
