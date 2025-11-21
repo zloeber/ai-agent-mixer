@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Optional, List
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -65,7 +65,7 @@ class MCPServerInstance:
             # Initialize the connection
             await self.session.initialize()
             
-            self.started_at = datetime.utcnow()
+            self.started_at = datetime.now(timezone.utc)
             
             # Perform health check
             await self._health_check()

@@ -2,7 +2,7 @@
 
 import logging
 from typing import Any, Dict, Optional, Type
-from datetime import datetime
+from datetime import datetime, timezone
 
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, create_model
@@ -52,13 +52,13 @@ class MCPAdapterTool(BaseTool):
             mcp_manager = get_mcp_manager()
             
             # Call the tool on the MCP server
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             result = await mcp_manager.call_tool(
                 server_name=self.server_name,
                 tool_name=self.tool_name,
                 arguments=kwargs
             )
-            duration = (datetime.utcnow() - start_time).total_seconds()
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
             
             logger.info(f"Tool {self.tool_name} completed in {duration:.2f}s")
             
@@ -194,7 +194,7 @@ class ToolExecutionLogger:
             "server_name": server_name,
             "duration_seconds": duration,
             "success": success,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         if success:
