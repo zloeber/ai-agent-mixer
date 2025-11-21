@@ -1,0 +1,292 @@
+import React, { useState, useEffect } from 'react';
+import websocketService from '../services/websocketService';
+
+interface ControlPanelProps {
+  onConversationStart?: () => void;
+}
+
+type ConversationStatus = 'idle' | 'starting' | 'running' | 'paused' | 'stopping' | 'terminated';
+
+const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
+  const [status, setStatus] = useState<ConversationStatus>('idle');
+  const [currentCycle, setCurrentCycle] = useState(0);
+  const [maxCycles, setMaxCycles] = useState(5);
+  const [messageCount, setMessageCount] = useState(0);
+  const [startingAgent, setStartingAgent] = useState<'agent_a' | 'agent_b'>('agent_a');
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [availableAgents, setAvailableAgents] = useState<string[]>(['agent_a', 'agent_b']);
+
+  // Check if configuration is loaded
+  useEffect(() => {
+    const checkConfig = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/health');
+        if (response.ok) {
+          const data = await response.json();
+          setConfigLoaded(data.config_loaded);
+        }
+      } catch (error) {
+        console.error('Error checking config:', error);
+      }
+    };
+
+    checkConfig();
+    const interval = setInterval(checkConfig, 3000); // Check every 3 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Subscribe to WebSocket events
+  useEffect(() => {
+    const unsubscribeStarted = websocketService.subscribe('conversation_started', (data: any) => {
+      setStatus('running');
+      setCurrentCycle(0);
+      setMessageCount(0);
+      if (data.max_cycles) {
+        setMaxCycles(data.max_cycles);
+      }
+      if (data.agents) {
+        setAvailableAgents(data.agents);
+      }
+      if (onConversationStart) {
+        onConversationStart();
+      }
+    });
+
+    const unsubscribeMessage = websocketService.subscribe('conversation_message', (data: any) => {
+      if (data.cycle !== undefined) {
+        setCurrentCycle(data.cycle);
+      }
+      setMessageCount(prev => prev + 1);
+    });
+
+    const unsubscribeEnded = websocketService.subscribe('conversation_ended', () => {
+      setStatus('terminated');
+    });
+
+    const unsubscribeStatus = websocketService.subscribe('conversation_status', (data: any) => {
+      if (data.status === 'paused') {
+        setStatus('paused');
+      } else if (data.status === 'resumed') {
+        setStatus('running');
+      }
+    });
+
+    const unsubscribeError = websocketService.subscribe('conversation_error', (data: any) => {
+      setStatus('terminated');
+      console.error('Conversation error:', data.error);
+    });
+
+    return () => {
+      unsubscribeStarted();
+      unsubscribeMessage();
+      unsubscribeEnded();
+      unsubscribeStatus();
+      unsubscribeError();
+    };
+  }, [onConversationStart]);
+
+  const handleStartConversation = async () => {
+    if (!configLoaded) {
+      alert('Please load a configuration first');
+      return;
+    }
+
+    setStatus('starting');
+
+    try {
+      const response = await fetch('http://localhost:8000/api/conversation/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Conversation started:', data);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to start conversation: ${errorData.detail}`);
+        setStatus('idle');
+      }
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      alert('Failed to start conversation');
+      setStatus('idle');
+    }
+  };
+
+  const handleStopConversation = async () => {
+    setStatus('stopping');
+
+    try {
+      const response = await fetch('http://localhost:8000/api/conversation/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        setStatus('idle');
+        setCurrentCycle(0);
+        setMessageCount(0);
+      }
+    } catch (error) {
+      console.error('Error stopping conversation:', error);
+    }
+  };
+
+  const handlePauseResume = async () => {
+    const endpoint = status === 'paused' ? '/api/conversation/resume' : '/api/conversation/pause';
+
+    try {
+      const response = await fetch(`http://localhost:8000${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        setStatus(status === 'paused' ? 'running' : 'paused');
+      }
+    } catch (error) {
+      console.error('Error toggling pause:', error);
+    }
+  };
+
+  const getStatusColor = () => {
+    switch (status) {
+      case 'idle':
+        return 'bg-gray-600';
+      case 'starting':
+        return 'bg-yellow-600 animate-pulse';
+      case 'running':
+        return 'bg-green-600 animate-pulse';
+      case 'paused':
+        return 'bg-yellow-600';
+      case 'stopping':
+        return 'bg-orange-600 animate-pulse';
+      case 'terminated':
+        return 'bg-red-600';
+      default:
+        return 'bg-gray-600';
+    }
+  };
+
+  const getStatusText = () => {
+    switch (status) {
+      case 'idle':
+        return 'Ready';
+      case 'starting':
+        return 'Starting...';
+      case 'running':
+        return 'Running';
+      case 'paused':
+        return 'Paused';
+      case 'stopping':
+        return 'Stopping...';
+      case 'terminated':
+        return 'Completed';
+      default:
+        return 'Unknown';
+    }
+  };
+
+  const canStart = configLoaded && (status === 'idle' || status === 'terminated');
+  const canStop = status === 'running' || status === 'paused';
+  const canPause = status === 'running' || status === 'paused';
+
+  return (
+    <div className="bg-gray-950 border-b border-gray-700 p-4">
+      <div className="flex items-center justify-between">
+        {/* Left: Status and Progress */}
+        <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-3">
+            <div className={`w-3 h-3 rounded-full ${getStatusColor()}`} />
+            <span className="text-white font-semibold">{getStatusText()}</span>
+          </div>
+
+          {status !== 'idle' && (
+            <>
+              <div className="text-sm text-gray-400">
+                Cycle: <span className="text-white font-semibold">{currentCycle}</span>
+                <span className="text-gray-500"> / {maxCycles}</span>
+              </div>
+
+              <div className="text-sm text-gray-400">
+                Messages: <span className="text-white font-semibold">{messageCount}</span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-48 bg-gray-700 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min((currentCycle / maxCycles) * 100, 100)}%` }}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Right: Controls */}
+        <div className="flex items-center space-x-4">
+          {/* Configuration Overrides */}
+          {status === 'idle' && (
+            <>
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-400">Starting Agent:</label>
+                <select
+                  value={startingAgent}
+                  onChange={(e) => setStartingAgent(e.target.value as 'agent_a' | 'agent_b')}
+                  className="px-2 py-1 text-sm bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:border-blue-500"
+                  disabled={!configLoaded}
+                >
+                  {availableAgents.map(agent => (
+                    <option key={agent} value={agent}>{agent}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-400">Max Cycles:</label>
+                <input
+                  type="number"
+                  value={maxCycles}
+                  onChange={(e) => setMaxCycles(Math.max(1, parseInt(e.target.value) || 1))}
+                  min="1"
+                  max="100"
+                  className="w-20 px-2 py-1 text-sm bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:border-blue-500"
+                  disabled={!configLoaded}
+                />
+              </div>
+            </>
+          )}
+
+          {/* Action Buttons */}
+          <button
+            onClick={handleStartConversation}
+            disabled={!canStart}
+            className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ▶️ Start
+          </button>
+
+          <button
+            onClick={handlePauseResume}
+            disabled={!canPause}
+            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {status === 'paused' ? '▶️ Resume' : '⏸️ Pause'}
+          </button>
+
+          <button
+            onClick={handleStopConversation}
+            disabled={!canStop}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ⏹️ Stop
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ControlPanel;

@@ -1,9 +1,28 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import AgentConsole from './components/AgentConsole';
 import ConversationExchange from './components/ConversationExchange';
 import ConfigurationPanel from './components/ConfigurationPanel';
+import ControlPanel from './components/ControlPanel';
+import websocketService from './services/websocketService';
 
 const App: React.FC = () => {
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    // Connect to WebSocket
+    websocketService.connect();
+
+    // Subscribe to connection events
+    const unsubscribe = websocketService.subscribe('connection', (data: any) => {
+      setIsConnected(data.status === 'connected');
+    });
+
+    return () => {
+      unsubscribe();
+      websocketService.disconnect();
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-screen bg-gray-900">
       {/* Header */}
@@ -13,20 +32,17 @@ const App: React.FC = () => {
             <h1 className="text-2xl font-bold text-white">
               🤖 AI Agent Mixer
             </h1>
-            <span className="px-2 py-1 text-xs bg-green-600 text-white rounded">
-              Ready
+            <span className={`px-2 py-1 text-xs rounded ${
+              isConnected ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+            }`}>
+              {isConnected ? '● Connected' : '○ Disconnected'}
             </span>
-          </div>
-          <div className="flex space-x-2">
-            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
-              Start Conversation
-            </button>
-            <button className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors">
-              Settings
-            </button>
           </div>
         </div>
       </header>
+
+      {/* Control Panel */}
+      <ControlPanel />
 
       {/* Main content - Three column layout */}
       <div className="flex-1 flex overflow-hidden">

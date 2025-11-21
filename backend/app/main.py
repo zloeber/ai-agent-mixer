@@ -26,6 +26,7 @@ app_state: Dict[str, Any] = {
     "config": None,
     "orchestrator": None,
     "conversation_running": False,
+    "conversation_paused": False,
 }
 
 
@@ -488,9 +489,66 @@ async def stop_conversation():
     app_state["conversation_running"] = False
     app_state["orchestrator"] = None
     
+    # Notify clients
+    await connection_manager.broadcast({
+        "type": "conversation_ended",
+        "reason": "stopped_by_user"
+    })
+    
     return {
         "status": "stopped",
         "message": "Conversation stopped"
+    }
+
+
+@app.post("/api/conversation/pause")
+async def pause_conversation():
+    """Pause the current conversation.
+    
+    Returns:
+        Pause result
+    """
+    if not app_state["conversation_running"]:
+        raise HTTPException(status_code=400, detail="No conversation running")
+    
+    app_state["conversation_paused"] = True
+    
+    # Notify clients
+    await connection_manager.broadcast({
+        "type": "conversation_status",
+        "status": "paused"
+    })
+    
+    return {
+        "status": "paused",
+        "message": "Conversation paused"
+    }
+
+
+@app.post("/api/conversation/resume")
+async def resume_conversation():
+    """Resume a paused conversation.
+    
+    Returns:
+        Resume result
+    """
+    if not app_state["conversation_running"]:
+        raise HTTPException(status_code=400, detail="No conversation running")
+    
+    if not app_state.get("conversation_paused"):
+        raise HTTPException(status_code=400, detail="Conversation is not paused")
+    
+    app_state["conversation_paused"] = False
+    
+    # Notify clients
+    await connection_manager.broadcast({
+        "type": "conversation_status",
+        "status": "resumed"
+    })
+    
+    return {
+        "status": "resumed",
+        "message": "Conversation resumed"
     }
 
 
