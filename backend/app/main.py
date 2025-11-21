@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from app.core.logging import setup_logging, get_logger
@@ -258,7 +258,7 @@ mcp_servers_healthy {healthy_servers}
 conversation_running {1 if app_state['conversation_running'] else 0}
 """
     
-    return JSONResponse(
+    return Response(
         content=metrics_text,
         media_type="text/plain; version=0.0.4"
     )

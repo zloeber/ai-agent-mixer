@@ -374,10 +374,8 @@ class TestConversationOrchestrator:
 
         with patch("app.core.orchestrator.get_mcp_manager"):
             with patch("app.core.orchestrator.get_tools_for_agent_as_langchain") as mock_get_tools:
-                # Make it return a coroutine that yields empty list
-                async def mock_get_tools_async(*args, **kwargs):
-                    return []
-                mock_get_tools.return_value = mock_get_tools_async()
+                # Use AsyncMock for cleaner async mocking
+                mock_get_tools.return_value = AsyncMock(return_value=[])()
                 
                 orchestrator = ConversationOrchestrator(config=simple_config)
 
