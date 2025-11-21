@@ -1,6 +1,7 @@
 # AI Agent Mixer - Synthetic AI Conversation Orchestrator 
 
 [![Phase 1](https://img.shields.io/badge/Phase%201-Complete-brightgreen.svg)](docs/PHASE1_COMPLETE.md)
+[![Phase 2](https://img.shields.io/badge/Phase%202-Complete-brightgreen.svg)](PHASE2_SUMMARY.md)
 [![Backend](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](backend/)
 [![Frontend](https://img.shields.io/badge/Frontend-React%2BTypeScript-61DAFB.svg)](frontend/)
 
@@ -161,13 +162,60 @@ All Phase 1 features have been successfully implemented:
 
 See [Phase 1 Complete Documentation](docs/PHASE1_COMPLETE.md) for detailed information.
 
-### 🚧 Coming Next: Phase 2 - Agent Engine & LangGraph Integration
+### ✅ Phase 2: Agent Engine & LangGraph Integration (COMPLETE)
 
-- Ollama integration layer
-- Thought suppression callback mechanism
-- LangGraph state definition and orchestration
-- Agent node factory
-- Cycle detection and termination logic
+All Phase 2 features have been successfully implemented:
+
+1. **Ollama Integration Layer**
+   - OllamaClient service with connection verification
+   - Streaming and non-streaming response generation
+   - Model availability checking
+   - Connection testing API endpoint
+
+2. **Thought Suppression Callback Mechanism**
+   - ThoughtSuppressingCallback for separating internal reasoning
+   - Real-time thought streaming to agent consoles
+   - Multiple thought pattern detection (XML, markdown, etc.)
+   - ConversationLoggingCallback for telemetry
+
+3. **LangGraph State Definition**
+   - AgentMessage model with metadata
+   - ConversationState TypedDict
+   - ConversationStateManager for state operations
+   - Serialization and persistence support
+
+4. **Agent Node Factory**
+   - create_agent_node() for LangGraph-compatible nodes
+   - Persona injection and timeout handling
+   - Streaming and non-streaming variants
+   - Comprehensive error handling
+
+5. **Conversation Orchestrator Graph**
+   - ConversationOrchestrator with LangGraph workflow
+   - Dynamic agent node creation
+   - Cycle check and routing logic
+   - State persistence with checkpointing
+
+6. **Cycle Detection & Termination Logic**
+   - CycleManager for tracking conversation cycles
+   - Max cycles termination
+   - Keyword trigger detection
+   - Silence detection
+
+7. **Initialization & First Message Handling**
+   - PromptBuilder with Jinja2 template rendering
+   - ConversationInitializer for state setup
+   - System prompt construction
+   - Configuration validation
+
+See [Phase 2 Summary](PHASE2_SUMMARY.md) for detailed information.
+
+### 🚧 Coming Next: Phase 3 - MCP Server Integration
+
+- MCP Server Manager
+- Global MCP configuration
+- Per-agent MCP server scoping
+- Tool routing and execution
 
 ## Installation
 
@@ -263,12 +311,23 @@ logging:
 
 ### Backend Endpoints
 
+**Configuration Management**:
 - `GET /health` - Health check
 - `GET /api/config/schema` - Get configuration JSON schema
 - `POST /api/config/import` - Import configuration from JSON
 - `GET /api/config/export` - Export current configuration
 - `POST /api/config/validate` - Validate YAML configuration
 - `POST /api/config/upload` - Upload YAML configuration file
+
+**Ollama Management**:
+- `POST /api/ollama/test-connection` - Test Ollama connection and model availability
+
+**Conversation Control**:
+- `POST /api/conversation/start` - Start a new conversation
+- `POST /api/conversation/stop` - Stop the current conversation
+- `GET /api/conversation/status` - Get conversation status
+
+**WebSocket**:
 - `GET /api/ws/status` - WebSocket connection status
 - `WS /ws/{client_id}` - WebSocket endpoint for real-time updates
 
@@ -316,8 +375,8 @@ ai-agent-mixer/
 This project is developed following the specifications in `PROJECT_SPECS.md`. Each phase builds upon the previous one:
 
 1. Phase 1: Foundation & Core Infrastructure (✅ Complete)
-2. Phase 2: Agent Engine & LangGraph Integration (🚧 Next)
-3. Phase 3: MCP Server Integration
+2. Phase 2: Agent Engine & LangGraph Integration (✅ Complete)
+3. Phase 3: MCP Server Integration (🚧 Next)
 4. Phase 4: Web Interface & Real-Time Features
 5. Phase 5: Testing, Polish & Deployment
 
