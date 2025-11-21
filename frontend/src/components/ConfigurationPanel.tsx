@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
+import * as yaml from 'js-yaml';
 
 interface ConfigurationPanelProps {
   onConfigApplied?: () => void;
@@ -77,8 +78,8 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ onConfigApplied
     try {
       const response = await fetch('http://localhost:8000/api/config/validate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(configText)
+        headers: { 'Content-Type': 'text/plain' },
+        body: configText
       });
 
       const data = await response.json();
@@ -101,8 +102,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ onConfigApplied
 
     try {
       // Parse YAML to get agent configurations
-      const yamlModule = await import('js-yaml');
-      const config = yamlModule.load(configText) as any;
+      const config = yaml.load(configText) as any;
 
       const results: Record<string, any> = {};
 
@@ -138,8 +138,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ onConfigApplied
 
   const handleApply = async () => {
     try {
-      const yamlModule = await import('js-yaml');
-      const configDict = yamlModule.load(configText);
+      const configDict = yaml.load(configText);
 
       const response = await fetch('http://localhost:8000/api/config/import', {
         method: 'POST',

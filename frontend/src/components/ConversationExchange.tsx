@@ -10,6 +10,8 @@ interface Message {
   cycle?: number;
 }
 
+let messageIdCounter = 0;
+
 const ConversationExchange: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentCycle, setCurrentCycle] = useState(0);
@@ -26,7 +28,7 @@ const ConversationExchange: React.FC = () => {
   useEffect(() => {
     const unsubscribeMessage = websocketService.subscribe('conversation_message', (data: any) => {
       const message: Message = {
-        id: `${data.agent_id}-${Date.now()}`,
+        id: `msg-${++messageIdCounter}-${Date.now()}`,
         agent_id: data.agent_id,
         agent_name: data.agent_name,
         content: data.content,
@@ -108,9 +110,10 @@ const ConversationExchange: React.FC = () => {
         headers: { 'Content-Type': 'application/json' }
       });
       
-      if (response.ok) {
-        setIsPaused(!isPaused);
+      if (!response.ok) {
+        console.error('Failed to toggle pause');
       }
+      // Status will be updated via WebSocket event
     } catch (error) {
       console.error('Error toggling pause:', error);
     }

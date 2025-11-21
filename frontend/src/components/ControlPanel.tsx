@@ -143,9 +143,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
         headers: { 'Content-Type': 'application/json' }
       });
 
-      if (response.ok) {
-        setStatus(status === 'paused' ? 'running' : 'paused');
+      if (!response.ok) {
+        console.error('Failed to toggle pause/resume');
       }
+      // Status will be updated via WebSocket event
     } catch (error) {
       console.error('Error toggling pause:', error);
     }
