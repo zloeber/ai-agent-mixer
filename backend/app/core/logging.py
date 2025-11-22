@@ -1,10 +1,11 @@
 """Logging configuration for the application."""
 
+import asyncio
 import json
 import logging
 import sys
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from app.schemas.config import LogLevel
 
@@ -85,3 +86,77 @@ def get_logger(name: str) -> logging.Logger:
         Logger instance
     """
     return logging.getLogger(name)
+
+
+class WebSocketLogHandler(logging.Handler):
+    """Logging handler that broadcasts logs to WebSocket clients."""
+    
+    def __init__(self, websocket_manager: Optional[Any] = None):
+        """Initialize WebSocket log handler.
+        
+        Args:
+            websocket_manager: WebSocket manager instance for broadcasting
+        """
+        super().__init__()
+        self.websocket_manager = websocket_manager
+    
+    def emit(self, record: logging.LogRecord) -> None:
+        """Emit a log record to WebSocket clients.
+        
+        Args:
+            record: Log record to emit
+        """
+        if not self.websocket_manager:
+            return
+        
+        try:
+            # Determine log type based on logger name
+            log_type = "debug_log"
+            if "llm" in record.name.lower() or "ollama" in record.name.lower():
+                log_type = "llm_log"
+            
+            # Extract agent_id if present in record
+            agent_id = getattr(record, "agent_id", None)
+            
+            # Create log message
+            log_message = {
+                "type": log_type,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "level": record.levelname.lower(),
+                "message": record.getMessage(),
+                "logger": record.name,
+            }
+            
+            if agent_id:
+                log_message["agent_id"] = agent_id
+            
+            # Broadcast asynchronously
+            # We need to create a task since emit() is synchronous
+            loop = None
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # No event loop in current thread
+                return
+            
+            if loop and loop.is_running():
+                asyncio.create_task(self.websocket_manager.broadcast(log_message))
+        
+        except Exception:
+            # Don't let logging errors break the application
+            pass
+
+
+def add_websocket_log_handler(websocket_manager: Any, log_level: str = "INFO") -> None:
+    """Add WebSocket log handler to root logger.
+    
+    Args:
+        websocket_manager: WebSocket manager instance
+        log_level: Minimum log level to broadcast (default: INFO)
+    """
+    handler = WebSocketLogHandler(websocket_manager)
+    handler.setLevel(getattr(logging, log_level))
+    
+    # Add to root logger
+    logger = logging.getLogger()
+    logger.addHandler(handler)

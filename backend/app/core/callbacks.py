@@ -82,6 +82,19 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
         self.response_buffer = []
         self.current_token = ""
         logger.debug(f"Agent {self.agent_id} starting LLM generation")
+        
+        # Broadcast LLM start event
+        if self.websocket_manager:
+            try:
+                await self.websocket_manager.broadcast({
+                    "type": "llm_log",
+                    "timestamp": asyncio.get_event_loop().time(),
+                    "level": "info",
+                    "message": f"Starting LLM generation",
+                    "agent_id": self.agent_id
+                })
+            except Exception as e:
+                logger.error(f"Error broadcasting LLM start: {e}")
     
     async def on_llm_new_token(
         self,
@@ -141,6 +154,7 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
         # Also send via WebSocket if manager is available
         if self.websocket_manager:
             try:
+                # Send to agent console
                 await self.websocket_manager.send_to_agent_console(
                     self.agent_id,
                     {
@@ -149,6 +163,15 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
                         "agent_id": self.agent_id
                     }
                 )
+                
+                # Also broadcast as agent_thought for LLM log tab
+                await self.websocket_manager.broadcast({
+                    "type": "agent_thought",
+                    "timestamp": asyncio.get_event_loop().time(),
+                    "thought": token,
+                    "agent_id": self.agent_id,
+                    "agent_name": self.agent_id  # Could be enhanced with actual agent name
+                })
             except Exception as e:
                 logger.error(f"Error sending thought via WebSocket: {e}")
     
@@ -163,6 +186,19 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
             f"Thought tokens: {len(self.thought_buffer)}, "
             f"Response tokens: {len(self.response_buffer)}"
         )
+        
+        # Broadcast LLM end event
+        if self.websocket_manager:
+            try:
+                await self.websocket_manager.broadcast({
+                    "type": "llm_log",
+                    "timestamp": asyncio.get_event_loop().time(),
+                    "level": "info",
+                    "message": f"Completed generation: {len(self.response_buffer)} response tokens, {len(self.thought_buffer)} thought tokens",
+                    "agent_id": self.agent_id
+                })
+            except Exception as e:
+                logger.error(f"Error broadcasting LLM end: {e}")
     
     async def on_llm_error(
         self,
@@ -171,6 +207,19 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
     ) -> None:
         """Called when LLM encounters an error."""
         logger.error(f"Agent {self.agent_id} LLM error: {error}")
+        
+        # Broadcast LLM error event
+        if self.websocket_manager:
+            try:
+                await self.websocket_manager.broadcast({
+                    "type": "llm_log",
+                    "timestamp": asyncio.get_event_loop().time(),
+                    "level": "error",
+                    "message": f"LLM error: {str(error)}",
+                    "agent_id": self.agent_id
+                })
+            except Exception as e:
+                logger.error(f"Error broadcasting LLM error: {e}")
     
     def get_response_text(self) -> str:
         """
