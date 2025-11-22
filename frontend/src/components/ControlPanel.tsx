@@ -123,10 +123,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
     setStatus('starting');
 
     try {
-      // Build URL with optional scenario parameter
+      // Build URL with optional scenario parameter and overrides
       const url = new URL('http://localhost:8000/api/conversation/start');
       if (selectedScenario) {
         url.searchParams.append('scenario', selectedScenario);
+      }
+      // Add runtime overrides
+      if (maxCycles) {
+        url.searchParams.append('max_cycles', maxCycles.toString());
+      }
+      if (startingAgent) {
+        url.searchParams.append('starting_agent', startingAgent);
       }
       
       const response = await fetch(url.toString(), {

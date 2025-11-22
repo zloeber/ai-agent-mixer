@@ -31,7 +31,9 @@ class ConversationOrchestrator:
         config: RootConfig,
         websocket_manager: Optional[Any] = None,
         thought_callback: Optional[Callable[[str, str], None]] = None,
-        scenario_name: Optional[str] = None
+        scenario_name: Optional[str] = None,
+        max_cycles_override: Optional[int] = None,
+        starting_agent_override: Optional[str] = None
     ):
         """
         Initialize conversation orchestrator.
@@ -41,6 +43,8 @@ class ConversationOrchestrator:
             websocket_manager: Optional WebSocket manager for real-time updates
             thought_callback: Optional callback for thought messages
             scenario_name: Optional scenario name to use (None = first/default)
+            max_cycles_override: Optional override for maximum cycles
+            starting_agent_override: Optional override for starting agent
         """
         self.config = config
         self.websocket_manager = websocket_manager
@@ -49,6 +53,18 @@ class ConversationOrchestrator:
         
         # Get conversation config for the selected scenario
         self.conversation_config = config.get_conversation_config(scenario_name)
+        
+        # Apply overrides if provided
+        if max_cycles_override is not None:
+            logger.info(f"Overriding max_cycles: {self.conversation_config.max_cycles} -> {max_cycles_override}")
+            self.conversation_config.max_cycles = max_cycles_override
+        
+        if starting_agent_override is not None:
+            if starting_agent_override in config.agents:
+                logger.info(f"Overriding starting_agent: {self.conversation_config.starting_agent} -> {starting_agent_override}")
+                self.conversation_config.starting_agent = starting_agent_override
+            else:
+                logger.warning(f"Invalid starting_agent override '{starting_agent_override}', using configured value")
         
         # Initialize components
         self.initializer = ConversationInitializer(config, scenario_name)

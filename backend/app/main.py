@@ -595,11 +595,17 @@ async def list_scenarios():
 
 
 @app.post("/api/conversation/start")
-async def start_conversation(scenario: str | None = None):
+async def start_conversation(
+    scenario: str | None = None,
+    max_cycles: int | None = None,
+    starting_agent: str | None = None
+):
     """Start a new conversation.
     
     Args:
         scenario: Optional scenario name to use (None = first/default)
+        max_cycles: Optional override for maximum cycles
+        starting_agent: Optional override for starting agent
     
     Returns:
         Conversation metadata
@@ -617,7 +623,9 @@ async def start_conversation(scenario: str | None = None):
         orchestrator = ConversationOrchestrator(
             config=app_state["config"],
             websocket_manager=connection_manager,
-            scenario_name=scenario
+            scenario_name=scenario,
+            max_cycles_override=max_cycles,
+            starting_agent_override=starting_agent
         )
         
         # Start conversation
@@ -629,7 +637,13 @@ async def start_conversation(scenario: str | None = None):
         app_state["metrics"]["conversations_started"] += 1
         
         scenario_info = f" (scenario: {scenario})" if scenario else ""
-        logger.info(f"Conversation started: {metadata['conversation_id']}{scenario_info}")
+        overrides = []
+        if max_cycles:
+            overrides.append(f"max_cycles={max_cycles}")
+        if starting_agent:
+            overrides.append(f"starting_agent={starting_agent}")
+        override_info = f" with overrides: {', '.join(overrides)}" if overrides else ""
+        logger.info(f"Conversation started: {metadata['conversation_id']}{scenario_info}{override_info}")
         
         # Note: Don't auto-run conversation, wait for continue command
         # This allows step-by-step execution
