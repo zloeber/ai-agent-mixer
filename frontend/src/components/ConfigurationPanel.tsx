@@ -18,6 +18,52 @@ interface MCPServerStatus {
   healthy: boolean;
 }
 
+interface ConversationScenario {
+  name: string;
+  goal?: string;
+  brevity: string;
+  starting_agent: string;
+  max_cycles: number;
+  turn_timeout: number;
+  agents_involved?: string[];
+}
+
+interface MCPServerConfig {
+  name: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+interface AgentConfig {
+  name: string;
+  persona: string;
+  mcp_servers?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+interface LoadedConfig {
+  agents?: Record<string, AgentConfig>;
+  initialization?: {
+    first_message?: string;
+    system_prompt_template?: string;
+  };
+  conversations?: ConversationScenario[];
+  conversation?: {
+    starting_agent: string;
+    max_cycles: number;
+    turn_timeout: number;
+  };
+  mcp_servers?: {
+    global_servers?: MCPServerConfig[];
+  };
+  logging?: {
+    level: string;
+    include_thoughts: boolean;
+    output_directory?: string;
+  };
+}
+
 const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ 
   onConfigApplied,
   agentConfigChanges = {}
@@ -30,7 +76,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
   const [mcpStatus, setMcpStatus] = useState<Record<string, MCPServerStatus>>({});
   const [connectionTestResults, setConnectionTestResults] = useState<Record<string, any>>({});
   const [isTestingConnections, setIsTestingConnections] = useState(false);
-  const [loadedConfig, setLoadedConfig] = useState<any>(null);
+  const [loadedConfig, setLoadedConfig] = useState<LoadedConfig | null>(null);
 
   // Fetch JSON schema for autocomplete
   useEffect(() => {
@@ -529,7 +575,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
                     <div>
                       <h4 className="text-white font-semibold mb-2">Available Scenarios</h4>
                       <div className="space-y-2">
-                        {loadedConfig.conversations.map((conv: any, idx: number) => (
+                        {loadedConfig.conversations.map((conv: ConversationScenario, idx: number) => (
                           <div key={idx} className="bg-gray-800 p-3 rounded border border-gray-700">
                             <div className="font-semibold text-white mb-1">{conv.name}</div>
                             {conv.goal && <div className="text-gray-400 text-xs mb-2">{conv.goal}</div>}
@@ -580,7 +626,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
                     <h4 className="text-white font-semibold mb-2">Global MCP Servers</h4>
                     {loadedConfig.mcp_servers.global_servers && loadedConfig.mcp_servers.global_servers.length > 0 ? (
                       <div className="space-y-2">
-                        {loadedConfig.mcp_servers.global_servers.map((server: any, idx: number) => (
+                        {loadedConfig.mcp_servers.global_servers.map((server: MCPServerConfig, idx: number) => (
                           <div key={idx} className="bg-gray-800 p-3 rounded border border-gray-700">
                             <div className="flex items-center justify-between mb-2">
                               <span className="font-semibold text-white">{server.name}</span>
@@ -609,11 +655,12 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
 
                   <div>
                     <h4 className="text-white font-semibold mb-2">Agent-Specific MCP Servers</h4>
-                    {loadedConfig.agents && Object.keys(loadedConfig.agents).some((agentId: string) => 
-                      loadedConfig.agents[agentId].mcp_servers && loadedConfig.agents[agentId].mcp_servers.length > 0
-                    ) ? (
+                    {loadedConfig.agents && Object.keys(loadedConfig.agents).some((agentId: string) => {
+                      const agent = loadedConfig.agents?.[agentId];
+                      return agent && agent.mcp_servers && agent.mcp_servers.length > 0;
+                    }) ? (
                       <div className="space-y-2">
-                        {Object.entries(loadedConfig.agents).map(([agentId, agent]: [string, any]) => (
+                        {loadedConfig.agents && Object.entries(loadedConfig.agents).map(([agentId, agent]: [string, AgentConfig]) => (
                           agent.mcp_servers && agent.mcp_servers.length > 0 && (
                             <div key={agentId} className="bg-gray-800 p-3 rounded border border-gray-700">
                               <div className="font-semibold text-white mb-1">{agent.name} ({agentId})</div>

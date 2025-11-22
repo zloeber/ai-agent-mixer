@@ -22,9 +22,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
   const [currentCycle, setCurrentCycle] = useState(0);
   const [maxCycles, setMaxCycles] = useState(5);
   const [messageCount, setMessageCount] = useState(0);
-  const [startingAgent, setStartingAgent] = useState<string>('agent_a');
+  const [startingAgent, setStartingAgent] = useState<string>('');
   const [configLoaded, setConfigLoaded] = useState(false);
-  const [availableAgents, setAvailableAgents] = useState<string[]>(['agent_a', 'agent_b']);
+  const [availableAgents, setAvailableAgents] = useState<string[]>([]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
 
@@ -42,20 +42,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
             try {
               // Fetch scenarios
               const scenariosResponse = await fetch('http://localhost:8000/api/conversation/scenarios');
-              let scenariosData: any = null;
+              let scenariosData: { scenarios: Scenario[], default: string | null } | null = null;
               if (scenariosResponse.ok) {
                 scenariosData = await scenariosResponse.json();
-                setScenarios(scenariosData.scenarios);
-                // Set default scenario if none selected
-                if (!selectedScenario && scenariosData.default) {
-                  setSelectedScenario(scenariosData.default);
+                if (scenariosData) {
+                  setScenarios(scenariosData.scenarios);
+                  // Set default scenario if none selected
+                  if (!selectedScenario && scenariosData.default) {
+                    setSelectedScenario(scenariosData.default);
+                  }
                 }
               }
 
               // Fetch agent list from config
               const configResponse = await fetch('http://localhost:8000/api/config/export');
               if (configResponse.ok) {
-                const config = await configResponse.json();
+                const config: { agents: Record<string, unknown> } = await configResponse.json();
                 if (config.agents) {
                   const agentIds = Object.keys(config.agents);
                   setAvailableAgents(agentIds);
