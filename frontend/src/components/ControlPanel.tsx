@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import websocketService from '../services/websocketService';
+import { displayConversationError } from '../utils/errorHandling';
 
 interface ControlPanelProps {
   onConversationStart?: () => void;
@@ -145,7 +146,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
       setStatus('terminated');
       console.error('Conversation error:', data);
       // Display error to user
-      alert(`Conversation Error: ${data.error || 'Unknown error occurred'}\n\nPlease check that Ollama is running and the configured models are available.`);
+      displayConversationError(data);
     });
 
     return () => {

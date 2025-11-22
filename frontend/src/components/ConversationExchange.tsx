@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import websocketService from '../services/websocketService';
+import { displayConversationError } from '../utils/errorHandling';
 
 interface Message {
   id: string;
@@ -76,7 +77,7 @@ const ConversationExchange: React.FC = () => {
       setIsTerminated(true);
       // Display error to user
       console.error('Conversation error:', data);
-      alert(`Conversation Error: ${data.error || 'Unknown error occurred'}\n\nPlease check that Ollama is running and the configured models are available.`);
+      displayConversationError(data);
     });
 
     return () => {
