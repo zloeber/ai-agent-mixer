@@ -44,9 +44,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
   const [messageCount, setMessageCount] = useState(0);
   const [startingAgent, setStartingAgent] = useState<string>('');
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [allAgents, setAllAgents] = useState<string[]>([]);
   const [availableAgents, setAvailableAgents] = useState<string[]>([]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
+  const [, setIsTerminated] = useState(false);
+  const [conversationStarted, setConversationStarted] = useState(false);
 
   // Check if configuration is loaded and fetch scenarios
   useEffect(() => {
@@ -80,12 +83,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
                 const config: { agents: Record<string, AgentConfigData> } = await configResponse.json();
                 if (config.agents) {
                   const agentIds = Object.keys(config.agents);
-                  setAvailableAgents(agentIds);
-                  // Set starting agent from first scenario or first agent
+                  setAllAgents(agentIds);
+                  
+                  // Set available agents based on first scenario or all agents
                   if (scenariosData && scenariosData.scenarios && scenariosData.scenarios.length > 0) {
-                    setStartingAgent(scenariosData.scenarios[0].starting_agent);
-                  } else if (agentIds.length > 0) {
-                    setStartingAgent(agentIds[0]);
+                    const firstScenario = scenariosData.scenarios[0];
+                    if (firstScenario.agents_involved && firstScenario.agents_involved.length > 0) {
+                      setAvailableAgents(firstScenario.agents_involved);
+                    } else {
+                      setAvailableAgents(agentIds);
+                    }
+                    setStartingAgent(firstScenario.starting_agent);
+                  } else {
+                    setAvailableAgents(agentIds);
+                    if (agentIds.length > 0) {
+                      setStartingAgent(agentIds[0]);
+                    }
                   }
                 }
               }
@@ -111,6 +124,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
       setStatus('running');
       setCurrentCycle(0);
       setMessageCount(0);
+      setIsTerminated(false);
+      setConversationStarted(true);
       if (data.max_cycles) {
         setMaxCycles(data.max_cycles);
       }
@@ -131,6 +146,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
 
     const unsubscribeEnded = websocketService.subscribe('conversation_ended', () => {
       setStatus('terminated');
+      setIsTerminated(true);
     });
 
     const unsubscribeStatus = websocketService.subscribe('conversation_status', (data: any) => {
@@ -143,6 +159,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
 
     const unsubscribeError = websocketService.subscribe('conversation_error', (data: any) => {
       setStatus('terminated');
+      setIsTerminated(true);
       console.error('Conversation error:', data.error);
     });
 
@@ -214,6 +231,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
     } catch (error) {
       console.error('Error stopping conversation:', error);
     }
+  };
+
+  const handleClearConversation = () => {
+    // Reset all conversation state
+    setStatus('idle');
+    setCurrentCycle(0);
+    setMessageCount(0);
+    setIsTerminated(false);
+    setConversationStarted(false);
+    
+    // Broadcast clear event to other components
+    websocketService.subscribe('clear', () => {});
+    
+    // Trigger a synthetic event for components to clear their state
+    // We'll use a custom event
+    window.dispatchEvent(new CustomEvent('clearConversation'));
   };
 
   const getStatusColor = () => {
@@ -304,12 +337,20 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
                       const newScenario = e.target.value || null;
                       setSelectedScenario(newScenario);
                       
-                      // Update starting agent and max cycles from selected scenario
+                      // Update starting agent, max cycles, and available agents from selected scenario
                       if (newScenario) {
                         const scenario = scenarios.find(s => s.name === newScenario);
                         if (scenario) {
                           setStartingAgent(scenario.starting_agent);
                           setMaxCycles(scenario.max_cycles);
+                          
+                          // Update available agents based on scenario's agents_involved
+                          if (scenario.agents_involved && scenario.agents_involved.length > 0) {
+                            setAvailableAgents(scenario.agents_involved);
+                          } else {
+                            // If no agents_involved specified, use all agents
+                            setAvailableAgents(allAgents);
+                          }
                         }
                       }
                       
@@ -374,6 +415,15 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ⏹️ Stop
+          </button>
+
+          <button
+            onClick={handleClearConversation}
+            disabled={!conversationStarted}
+            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Clear conversation and reset interface"
+          >
+            🧹 Clear
           </button>
         </div>
       </div>
