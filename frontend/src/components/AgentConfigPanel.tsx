@@ -24,6 +24,9 @@ export interface AgentConfigData {
   mcp_servers: string[];
 }
 
+// API configuration
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({ 
   agentId, 
   agentName,
@@ -44,7 +47,7 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
   const loadAgentConfig = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('http://localhost:8000/api/config/export');
+      const response = await fetch(`${API_BASE_URL}/api/config/export`);
       if (response.ok) {
         const rootConfig = await response.json();
         if (rootConfig.agents && rootConfig.agents[agentId]) {
@@ -58,7 +61,7 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
     }
   };
 
-  const handleConfigChange = (field: string, value: any) => {
+  const handleConfigChange = (field: string, value: string | number | boolean | Record<string, any>) => {
     if (!config) return;
 
     const updatedConfig = { ...config };
@@ -85,9 +88,10 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
     }
   };
 
-  const handleApplyChanges = () => {
+  const handleMarkAsApplied = () => {
+    // Mark changes as applied - the parent component handles updating the full configuration
+    // This is just a UI state update to clear the "has changes" indicator
     setHasChanges(false);
-    // Parent component will handle updating the full configuration
   };
 
   const handleResetChanges = () => {
@@ -277,8 +281,9 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
               {hasChanges && (
                 <div className="flex space-x-2 border-t border-gray-700 pt-4">
                   <button
-                    onClick={handleApplyChanges}
+                    onClick={handleMarkAsApplied}
                     className="flex-1 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                    title="Mark changes as applied. Use 'Download w/ Changes' button to export."
                   >
                     ✓ Mark as Applied
                   </button>

@@ -12,6 +12,8 @@ interface Message {
 
 let messageIdCounter = 0;
 
+const AUTO_CONTINUE_DELAY_MS = 500; // Delay before auto-continuing conversation to ensure backend is ready
+
 const ConversationExchange: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentCycle, setCurrentCycle] = useState(0);
@@ -123,7 +125,7 @@ const ConversationExchange: React.FC = () => {
           setIsRunning(false);
           setIsTerminated(true);
         }
-      }, 500); // Increase delay slightly to ensure backend is ready
+      }, AUTO_CONTINUE_DELAY_MS);
       
       return () => clearTimeout(timer);
     }

@@ -61,6 +61,13 @@ class ConversationOrchestrator:
         
         if starting_agent_override is not None:
             if starting_agent_override in config.agents:
+                # Verify agent is properly configured
+                agent_config = config.agents[starting_agent_override]
+                if not agent_config.model or not agent_config.model.url:
+                    logger.warning(
+                        f"Starting agent '{starting_agent_override}' may not be properly configured "
+                        f"(missing model URL)"
+                    )
                 logger.info(f"Overriding starting_agent: {self.conversation_config.starting_agent} -> {starting_agent_override}")
                 self.conversation_config.starting_agent = starting_agent_override
             else:
