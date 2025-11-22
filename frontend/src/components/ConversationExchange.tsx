@@ -12,6 +12,8 @@ interface Message {
 
 let messageIdCounter = 0;
 
+const AUTO_CONTINUE_DELAY_MS = 500; // Delay before auto-continuing conversation to ensure backend is ready
+
 const ConversationExchange: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentCycle, setCurrentCycle] = useState(0);
@@ -90,6 +92,7 @@ const ConversationExchange: React.FC = () => {
       // Small delay to ensure state is settled
       const timer = setTimeout(async () => {
         try {
+          console.log('Auto-continuing conversation for 1 cycle...');
           setIsRunning(true);
           const response = await fetch('http://localhost:8000/api/conversation/continue?cycles=1', {
             method: 'POST',
@@ -99,24 +102,30 @@ const ConversationExchange: React.FC = () => {
           if (!response.ok) {
             const error = await response.json();
             console.error('Failed to auto-continue conversation:', error);
+            alert(`Failed to start conversation: ${error.detail || 'Unknown error'}`);
             setIsRunning(false);
+            setIsTerminated(true);
           } else {
             const result = await response.json();
             console.log('Auto-continued conversation:', result);
             
             if (result.terminated) {
+              console.log('Conversation terminated:', result.termination_reason);
               setIsRunning(false);
               setIsTerminated(true);
               setCurrentTurnAgent(null);
             } else {
+              console.log(`Conversation cycle ${result.current_cycle} completed`);
               setIsRunning(false);
             }
           }
         } catch (error) {
           console.error('Error auto-continuing conversation:', error);
+          alert('Failed to start conversation - check console for details');
           setIsRunning(false);
+          setIsTerminated(true);
         }
-      }, 200);
+      }, AUTO_CONTINUE_DELAY_MS);
       
       return () => clearTimeout(timer);
     }
@@ -153,6 +162,7 @@ const ConversationExchange: React.FC = () => {
 
   const runCycles = async (cycles: number) => {
     try {
+      console.log(`Running ${cycles} cycle(s)...`);
       setIsRunning(true);
       const response = await fetch(`http://localhost:8000/api/conversation/continue?cycles=${cycles}`, {
         method: 'POST',
@@ -162,7 +172,7 @@ const ConversationExchange: React.FC = () => {
       if (!response.ok) {
         const error = await response.json();
         console.error('Failed to continue conversation:', error);
-        alert(`Failed to continue: ${error.detail}`);
+        alert(`Failed to continue: ${error.detail || 'Unknown error'}`);
         setIsRunning(false);
       } else {
         const result = await response.json();
@@ -170,16 +180,18 @@ const ConversationExchange: React.FC = () => {
         
         // Update state based on response
         if (result.terminated) {
+          console.log('Conversation terminated:', result.termination_reason);
           setIsRunning(false);
           setIsTerminated(true);
           setCurrentTurnAgent(null);
         } else {
+          console.log(`Completed ${result.cycles_run} cycles, now at cycle ${result.current_cycle}`);
           setIsRunning(false);
         }
       }
     } catch (error) {
       console.error('Error continuing conversation:', error);
-      alert('Failed to continue conversation');
+      alert('Failed to continue conversation - check console for details');
       setIsRunning(false);
     }
   };

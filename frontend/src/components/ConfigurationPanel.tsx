@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import * as yaml from 'js-yaml';
+import { AgentConfigData } from './AgentConfigPanel';
 
 interface ConfigurationPanelProps {
   onConfigApplied?: () => void;
+  agentConfigChanges?: Record<string, AgentConfigData>;
 }
 
 interface ValidationError {
@@ -16,7 +18,10 @@ interface MCPServerStatus {
   healthy: boolean;
 }
 
-const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ onConfigApplied }) => {
+const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ 
+  onConfigApplied,
+  agentConfigChanges = {}
+}) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [configText, setConfigText] = useState('');
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
@@ -198,6 +203,44 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ onConfigApplied
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadWithChanges = () => {
+    try {
+      // Parse current YAML
+      const config = yaml.load(configText) as Record<string, unknown>;
+      
+      // Apply agent config changes
+      if (config.agents && typeof config.agents === 'object' && Object.keys(agentConfigChanges).length > 0) {
+        const agents = config.agents as Record<string, unknown>;
+        for (const [agentId, agentConfig] of Object.entries(agentConfigChanges)) {
+          if (agents[agentId]) {
+            agents[agentId] = agentConfig;
+          }
+        }
+      }
+      
+      // Convert back to YAML
+      const updatedYaml = yaml.dump(config, {
+        lineWidth: -1, // Don't wrap lines
+        noRefs: true,
+        sortKeys: false
+      });
+      
+      // Download
+      const blob = new Blob([updatedYaml], { type: 'text/yaml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `config-updated-${Date.now()}.yaml`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error generating updated config:', error);
+      alert('Failed to generate updated configuration');
+    }
+  };
+
   return (
     <div
       className={`transition-all duration-300 bg-gray-900 border-t border-gray-700 ${
@@ -279,6 +322,18 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ onConfigApplied
             >
               💾 Export
             </button>
+            
+            {/* Download with Agent Changes button - only show if there are changes */}
+            {Object.keys(agentConfigChanges).length > 0 && (
+              <button
+                onClick={handleDownloadWithChanges}
+                className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 animate-pulse"
+                disabled={!configText}
+                title="Download YAML with agent configuration changes"
+              >
+                ⬇️ Download w/ Changes
+              </button>
+            )}
             
             {/* Validation Status */}
             {validationStatus !== 'idle' && (

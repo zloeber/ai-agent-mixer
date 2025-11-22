@@ -66,7 +66,7 @@ const AgentConsole: React.FC<AgentConsoleProps> = ({ agentId, agentName }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 border-r border-gray-700">
+    <div className="flex flex-col h-full bg-gray-900">
       {/* Header */}
       <div className="p-4 border-b border-gray-700 bg-gray-800">
         <div className="flex justify-between items-center">

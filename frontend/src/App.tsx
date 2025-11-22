@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import AgentConsole from './components/AgentConsole';
+import AgentConfigPanel, { AgentConfigData } from './components/AgentConfigPanel';
 import ConversationExchange from './components/ConversationExchange';
 import ConfigurationPanel from './components/ConfigurationPanel';
 import ControlPanel from './components/ControlPanel';
@@ -7,6 +7,7 @@ import websocketService from './services/websocketService';
 
 const App: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
+  const [agentConfigChanges, setAgentConfigChanges] = useState<Record<string, AgentConfigData>>({});
 
   useEffect(() => {
     // Connect to WebSocket
@@ -22,6 +23,13 @@ const App: React.FC = () => {
       websocketService.disconnect();
     };
   }, []);
+
+  const handleAgentConfigChange = (agentId: string, config: AgentConfigData) => {
+    setAgentConfigChanges(prev => ({
+      ...prev,
+      [agentId]: config
+    }));
+  };
 
   return (
     <div className="flex flex-col h-screen bg-gray-900">
@@ -46,9 +54,13 @@ const App: React.FC = () => {
 
       {/* Main content - Three column layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left column - Agent A Console */}
+        {/* Left column - Agent A Config Panel */}
         <div className="w-1/4 min-w-[300px] max-w-[400px] hidden lg:block">
-          <AgentConsole agentId="agent_a" agentName="Agent A" />
+          <AgentConfigPanel 
+            agentId="agent_a" 
+            agentName="Agent A"
+            onConfigChange={handleAgentConfigChange}
+          />
         </div>
 
         {/* Center column - Conversation Exchange */}
@@ -56,14 +68,18 @@ const App: React.FC = () => {
           <ConversationExchange />
         </div>
 
-        {/* Right column - Agent B Console */}
+        {/* Right column - Agent B Config Panel */}
         <div className="w-1/4 min-w-[300px] max-w-[400px] hidden lg:block">
-          <AgentConsole agentId="agent_b" agentName="Agent B" />
+          <AgentConfigPanel 
+            agentId="agent_b" 
+            agentName="Agent B"
+            onConfigChange={handleAgentConfigChange}
+          />
         </div>
       </div>
 
       {/* Bottom panel - Configuration */}
-      <ConfigurationPanel />
+      <ConfigurationPanel agentConfigChanges={agentConfigChanges} />
     </div>
   );
 };
