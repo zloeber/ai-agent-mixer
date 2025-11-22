@@ -10,12 +10,25 @@ interface Message {
   cycle?: number;
 }
 
+interface LogEntry {
+  id: string;
+  timestamp: string;
+  level: 'debug' | 'info' | 'warning' | 'error';
+  message: string;
+  agent_id?: string;
+}
+
+type TabType = 'conversation' | 'debug' | 'llm';
+
 let messageIdCounter = 0;
 
 const AUTO_CONTINUE_DELAY_MS = 500; // Delay before auto-continuing conversation to ensure backend is ready
 
 const ConversationExchange: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [debugLogs, setDebugLogs] = useState<LogEntry[]>([]);
+  const [llmLogs, setLlmLogs] = useState<LogEntry[]>([]);
+  const [activeTab, setActiveTab] = useState<TabType>('conversation');
   const [currentCycle, setCurrentCycle] = useState(0);
   const [currentTurnAgent, setCurrentTurnAgent] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -24,11 +37,38 @@ const ConversationExchange: React.FC = () => {
   const [maxCycles, setMaxCycles] = useState(0);
   const [shouldAutoRun, setShouldAutoRun] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const debugLogsEndRef = useRef<HTMLDivElement>(null);
+  const llmLogsEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages or logs arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (activeTab === 'conversation') {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else if (activeTab === 'debug') {
+      debugLogsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else if (activeTab === 'llm') {
+      llmLogsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, debugLogs, llmLogs, activeTab]);
+
+  // Listen for clear event from ControlPanel
+  useEffect(() => {
+    const handleClear = () => {
+      setMessages([]);
+      setDebugLogs([]);
+      setLlmLogs([]);
+      setCurrentCycle(0);
+      setCurrentTurnAgent(null);
+      setIsRunning(false);
+      setIsTerminated(false);
+      setConversationStarted(false);
+      setMaxCycles(0);
+      setActiveTab('conversation');
+    };
+
+    window.addEventListener('clearConversation', handleClear);
+    return () => window.removeEventListener('clearConversation', handleClear);
+  }, []);
 
   // Subscribe to WebSocket events
   useEffect(() => {
@@ -53,6 +93,8 @@ const ConversationExchange: React.FC = () => {
 
     const unsubscribeStarted = websocketService.subscribe('conversation_started', (data: any) => {
       setMessages([]);
+      setDebugLogs([]);
+      setLlmLogs([]);
       setCurrentCycle(0);
       setCurrentTurnAgent(data.starting_agent);
       setIsRunning(true);
@@ -76,12 +118,51 @@ const ConversationExchange: React.FC = () => {
       setIsTerminated(true);
     });
 
+    // Subscribe to debug logs
+    const unsubscribeDebug = websocketService.subscribe('debug_log', (data: any) => {
+      const logEntry: LogEntry = {
+        id: `log-${++messageIdCounter}-${Date.now()}`,
+        timestamp: data.timestamp || new Date().toISOString(),
+        level: data.level || 'debug',
+        message: data.message,
+        agent_id: data.agent_id
+      };
+      setDebugLogs(prev => [...prev, logEntry]);
+    });
+
+    // Subscribe to LLM processing logs
+    const unsubscribeLLM = websocketService.subscribe('llm_log', (data: any) => {
+      const logEntry: LogEntry = {
+        id: `log-${++messageIdCounter}-${Date.now()}`,
+        timestamp: data.timestamp || new Date().toISOString(),
+        level: data.level || 'info',
+        message: data.message,
+        agent_id: data.agent_id
+      };
+      setLlmLogs(prev => [...prev, logEntry]);
+    });
+
+    // Also capture agent thoughts as LLM logs
+    const unsubscribeThought = websocketService.subscribe('agent_thought', (data: any) => {
+      const logEntry: LogEntry = {
+        id: `log-${++messageIdCounter}-${Date.now()}`,
+        timestamp: data.timestamp || new Date().toISOString(),
+        level: 'info',
+        message: `[${data.agent_name}] ${data.thought}`,
+        agent_id: data.agent_id
+      };
+      setLlmLogs(prev => [...prev, logEntry]);
+    });
+
     return () => {
       unsubscribeMessage();
       unsubscribeTurn();
       unsubscribeStarted();
       unsubscribeEnded();
       unsubscribeError();
+      unsubscribeDebug();
+      unsubscribeLLM();
+      unsubscribeThought();
     };
   }, []);
 
@@ -207,12 +288,58 @@ const ConversationExchange: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-800">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-700 bg-gray-900">
-        <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-white">
-            Conversation Exchange
-          </h2>
+      {/* Header with Tabs */}
+      <div className="border-b border-gray-700 bg-gray-900">
+        <div className="p-4 flex justify-between items-center">
+          <div className="flex items-center space-x-4">
+            <h2 className="text-lg font-semibold text-white">
+              Conversation Exchange
+            </h2>
+            
+            {/* Tabs */}
+            <div className="flex space-x-1">
+              <button
+                onClick={() => setActiveTab('conversation')}
+                className={`px-3 py-1 text-xs rounded transition-colors ${
+                  activeTab === 'conversation'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                💬 Conversation
+                {messages.length > 0 && (
+                  <span className="ml-1 text-xs opacity-75">({messages.length})</span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('debug')}
+                className={`px-3 py-1 text-xs rounded transition-colors ${
+                  activeTab === 'debug'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                🐛 Debug Logs
+                {debugLogs.length > 0 && (
+                  <span className="ml-1 text-xs opacity-75">({debugLogs.length})</span>
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('llm')}
+                className={`px-3 py-1 text-xs rounded transition-colors ${
+                  activeTab === 'llm'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                🤖 LLM Processing
+                {llmLogs.length > 0 && (
+                  <span className="ml-1 text-xs opacity-75">({llmLogs.length})</span>
+                )}
+              </button>
+            </div>
+          </div>
+          
           <div className="flex items-center space-x-4">
             <div className="text-sm text-gray-400">
               Cycle: <span className="text-white font-semibold">{currentCycle}</span>
@@ -284,52 +411,131 @@ const ConversationExchange: React.FC = () => {
         </div>
       </div>
 
-      {/* Messages */}
+      {/* Tab Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-gray-500 text-center">
-              <div className="text-4xl mb-2">💬</div>
-              <div>No conversation yet</div>
-              <div className="text-sm mt-1">Configure and start agents to begin</div>
-            </div>
-          </div>
-        ) : (
+        {/* Conversation Tab */}
+        {activeTab === 'conversation' && (
           <>
-            {messages.map((msg) => {
-              const isCurrentTurn = currentTurnAgent === msg.agent_id;
-              // Determine if this is the left agent (first agent that appears)
-              const firstAgentId = messages[0]?.agent_id;
-              const isLeftAgent = msg.agent_id === firstAgentId;
-              
-              // Assign darker, distinct colors for each agent
-              const agentColor = isLeftAgent
-                ? 'bg-slate-700 text-gray-100'
-                : 'bg-indigo-900 text-gray-100';
-              
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex ${isLeftAgent ? 'justify-start' : 'justify-end'}`}
-                >
-                  <div
-                    className={`max-w-[70%] rounded-lg p-4 ${agentColor} ${
-                      isCurrentTurn ? 'ring-2 ring-yellow-400' : ''
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2 mb-2">
-                      <span className="font-semibold text-sm">{msg.agent_name}</span>
-                      <span className="text-xs opacity-75">{formatTimestamp(msg.timestamp)}</span>
-                      {msg.cycle !== undefined && (
-                        <span className="text-xs opacity-75">Cycle {msg.cycle}</span>
-                      )}
-                    </div>
-                    <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
-                  </div>
+            {messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-gray-500 text-center">
+                  <div className="text-4xl mb-2">💬</div>
+                  <div>No conversation yet</div>
+                  <div className="text-sm mt-1">Configure and start agents to begin</div>
                 </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
+              </div>
+            ) : (
+              <>
+                {messages.map((msg) => {
+                  const isCurrentTurn = currentTurnAgent === msg.agent_id;
+                  const firstAgentId = messages[0]?.agent_id;
+                  const isLeftAgent = msg.agent_id === firstAgentId;
+                  
+                  const agentColor = isLeftAgent
+                    ? 'bg-slate-700 text-gray-100'
+                    : 'bg-indigo-900 text-gray-100';
+                  
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex ${isLeftAgent ? 'justify-start' : 'justify-end'}`}
+                    >
+                      <div
+                        className={`max-w-[70%] rounded-lg p-4 ${agentColor} ${
+                          isCurrentTurn ? 'ring-2 ring-yellow-400' : ''
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className="font-semibold text-sm">{msg.agent_name}</span>
+                          <span className="text-xs opacity-75">{formatTimestamp(msg.timestamp)}</span>
+                          {msg.cycle !== undefined && (
+                            <span className="text-xs opacity-75">Cycle {msg.cycle}</span>
+                          )}
+                        </div>
+                        <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </>
+        )}
+
+        {/* Debug Logs Tab */}
+        {activeTab === 'debug' && (
+          <>
+            {debugLogs.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-gray-500 text-center">
+                  <div className="text-4xl mb-2">🐛</div>
+                  <div>No debug logs yet</div>
+                  <div className="text-sm mt-1">Logs will appear when conversation is running</div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="font-mono text-xs space-y-1">
+                  {debugLogs.map((log) => {
+                    const levelColor = {
+                      debug: 'text-gray-400',
+                      info: 'text-blue-400',
+                      warning: 'text-yellow-400',
+                      error: 'text-red-400'
+                    }[log.level];
+                    
+                    return (
+                      <div key={log.id} className="flex space-x-2 p-2 bg-gray-900 rounded">
+                        <span className="text-gray-500">{formatTimestamp(log.timestamp)}</span>
+                        <span className={`font-semibold uppercase ${levelColor}`}>[{log.level}]</span>
+                        {log.agent_id && <span className="text-purple-400">[{log.agent_id}]</span>}
+                        <span className="text-gray-300 flex-1">{log.message}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div ref={debugLogsEndRef} />
+              </>
+            )}
+          </>
+        )}
+
+        {/* LLM Processing Tab */}
+        {activeTab === 'llm' && (
+          <>
+            {llmLogs.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-gray-500 text-center">
+                  <div className="text-4xl mb-2">🤖</div>
+                  <div>No LLM processing logs yet</div>
+                  <div className="text-sm mt-1">LLM logs and agent thoughts will appear here</div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="font-mono text-xs space-y-1">
+                  {llmLogs.map((log) => {
+                    const levelColor = {
+                      debug: 'text-gray-400',
+                      info: 'text-blue-400',
+                      warning: 'text-yellow-400',
+                      error: 'text-red-400'
+                    }[log.level];
+                    
+                    return (
+                      <div key={log.id} className="flex space-x-2 p-2 bg-gray-900 rounded">
+                        <span className="text-gray-500">{formatTimestamp(log.timestamp)}</span>
+                        <span className={`font-semibold uppercase ${levelColor}`}>[{log.level}]</span>
+                        {log.agent_id && <span className="text-green-400">[{log.agent_id}]</span>}
+                        <span className="text-gray-300 flex-1 whitespace-pre-wrap">{log.message}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div ref={llmLogsEndRef} />
+              </>
+            )}
           </>
         )}
       </div>

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
-from app.core.logging import setup_logging, get_logger
+from app.core.logging import setup_logging, get_logger, add_websocket_log_handler
 from app.core.websocket_manager import connection_manager
 from app.core.orchestrator import ConversationOrchestrator
 from app.core.exceptions import (
@@ -58,6 +58,10 @@ async def lifespan(app: FastAPI):
     
     # Initialize default logging
     setup_logging(LogLevel.INFO)
+    
+    # Add WebSocket log handler for real-time log streaming to frontend
+    add_websocket_log_handler(connection_manager, log_level="DEBUG")
+    logger.info("WebSocket log handler added")
     
     # Initialize MCP manager
     mcp_manager = get_mcp_manager()
