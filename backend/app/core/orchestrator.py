@@ -418,6 +418,7 @@ class ConversationOrchestrator:
             event_count = 0
             async for event in self.graph.astream(self.current_state, config, stream_mode="values"):
                 event_count += 1
+                # Debug logging for troubleshooting - only appears when DEBUG log level is enabled
                 logger.debug(f"Received event #{event_count} from graph stream")
                 self.current_state = event
                 
