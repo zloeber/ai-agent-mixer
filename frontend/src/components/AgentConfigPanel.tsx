@@ -18,7 +18,7 @@ export interface AgentConfigData {
     parameters: {
       temperature: number;
       top_p: number;
-      [key: string]: any;
+      [key: string]: string | number | boolean;
     };
   };
   mcp_servers: string[];
@@ -61,13 +61,14 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
     }
   };
 
-  const handleConfigChange = (field: string, value: string | number | boolean | Record<string, any>) => {
+  const handleConfigChange = (field: string, value: string | number | boolean | Record<string, string | number | boolean>) => {
     if (!config) return;
 
     const updatedConfig = { ...config };
     const keys = field.split('.');
     
     // Navigate to nested property
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let current: any = updatedConfig;
     for (let i = 0; i < keys.length - 1; i++) {
       if (!current[keys[i]]) {

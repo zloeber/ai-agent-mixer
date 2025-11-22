@@ -206,13 +206,14 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
   const handleDownloadWithChanges = () => {
     try {
       // Parse current YAML
-      const config = yaml.load(configText) as any;
+      const config = yaml.load(configText) as Record<string, unknown>;
       
       // Apply agent config changes
-      if (config.agents && Object.keys(agentConfigChanges).length > 0) {
+      if (config.agents && typeof config.agents === 'object' && Object.keys(agentConfigChanges).length > 0) {
+        const agents = config.agents as Record<string, unknown>;
         for (const [agentId, agentConfig] of Object.entries(agentConfigChanges)) {
-          if (config.agents[agentId]) {
-            config.agents[agentId] = agentConfig;
+          if (agents[agentId]) {
+            agents[agentId] = agentConfig;
           }
         }
       }
