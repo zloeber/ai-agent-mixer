@@ -183,7 +183,7 @@ class ConversationOrchestrator:
             self._route_next_agent,
             {
                 "terminate": END,
-                **{agent_id: agent_id for agent_id in self.config.agents.keys()}
+                **{agent_id: agent_id for agent_id in active_agents.keys()}
             }
         )
         
@@ -205,7 +205,7 @@ class ConversationOrchestrator:
         messages = ConversationStateManager.get_messages(state)
         if messages:
             last_message = messages[-1]
-            if last_message.agent_id in self.config.agents:
+            if last_message.agent_id in self.active_agents:
                 # Register agent turn (this also increments the cycle)
                 cycle_num = self.cycle_manager.register_agent_turn(last_message.agent_id)
                 
