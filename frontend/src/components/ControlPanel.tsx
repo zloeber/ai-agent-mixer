@@ -17,6 +17,26 @@ interface Scenario {
   agents_involved?: string[];
 }
 
+interface AgentConfigData {
+  name: string;
+  persona: string;
+  model: {
+    provider: string;
+    url: string;
+    model_name: string;
+    thinking: boolean;
+    parameters: {
+      temperature: number;
+      top_p: number;
+      [key: string]: string | number | boolean;
+    };
+  };
+  mcp_servers: string[];
+  metadata: {
+    [key: string]: unknown;
+  };
+}
+
 const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScenarioChange }) => {
   const [status, setStatus] = useState<ConversationStatus>('idle');
   const [currentCycle, setCurrentCycle] = useState(0);
@@ -57,7 +77,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
               // Fetch agent list from config
               const configResponse = await fetch('http://localhost:8000/api/config/export');
               if (configResponse.ok) {
-                const config: { agents: Record<string, unknown> } = await configResponse.json();
+                const config: { agents: Record<string, AgentConfigData> } = await configResponse.json();
                 if (config.agents) {
                   const agentIds = Object.keys(config.agents);
                   setAvailableAgents(agentIds);

@@ -24,7 +24,7 @@ export interface AgentConfigData {
   };
   mcp_servers: string[];
   metadata: {
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -110,7 +110,7 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
     }
     
     // Try to parse value as JSON, otherwise store as string
-    let parsedValue: any = newMetadataValue;
+    let parsedValue: unknown = newMetadataValue;
     try {
       parsedValue = JSON.parse(newMetadataValue);
     } catch {
@@ -153,7 +153,7 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
     }
     
     // Try to parse value as JSON
-    let parsedValue: any = value;
+    let parsedValue: unknown = value;
     try {
       parsedValue = JSON.parse(value);
     } catch {
