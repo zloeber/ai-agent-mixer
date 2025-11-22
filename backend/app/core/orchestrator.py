@@ -183,7 +183,7 @@ class ConversationOrchestrator:
             self._route_next_agent,
             {
                 "terminate": END,
-                **{agent_id: agent_id for agent_id in self.config.agents.keys()}
+                **{agent_id: agent_id for agent_id in active_agents.keys()}
             }
         )
         
@@ -205,9 +205,11 @@ class ConversationOrchestrator:
         messages = ConversationStateManager.get_messages(state)
         if messages:
             last_message = messages[-1]
-            if last_message.agent_id in self.config.agents:
+            if last_message.agent_id in self.active_agents:
                 # Register agent turn (this also increments the cycle)
                 cycle_num = self.cycle_manager.register_agent_turn(last_message.agent_id)
+                
+                logger.info(f"Registered turn for agent {last_message.agent_id}, cycle is now {cycle_num}")
                 
                 # Update cycle count in state
                 state["current_cycle"] = cycle_num
@@ -412,7 +414,12 @@ class ConversationOrchestrator:
         
         try:
             # Use astream to get intermediate states
+            logger.info(f"Starting graph execution from cycle {self.current_state['current_cycle']}")
+            event_count = 0
             async for event in self.graph.astream(self.current_state, config, stream_mode="values"):
+                event_count += 1
+                # Debug logging for troubleshooting - only appears when DEBUG log level is enabled
+                logger.debug(f"Received event #{event_count} from graph stream")
                 self.current_state = event
                 
                 # Check if we've reached target cycle or termination
@@ -436,6 +443,7 @@ class ConversationOrchestrator:
                     logger.info(f"Reached target cycle {target_cycle}")
                     break
             
+            logger.info(f"Graph execution completed after {event_count} events")
             return self.current_state
             
         except Exception as e:

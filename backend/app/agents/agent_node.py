@@ -183,6 +183,19 @@ def create_agent_node(
             )
             state = ConversationStateManager.add_message(state, error_message)
             state = ConversationStateManager.set_termination(state, "agent_timeout")
+            
+            # Broadcast error to WebSocket
+            if websocket_manager:
+                try:
+                    await websocket_manager.broadcast({
+                        "type": "conversation_error",
+                        "error": f"Agent {agent_config.name} timed out after {turn_timeout}s",
+                        "agent_id": agent_id,
+                        "error_type": "timeout"
+                    })
+                except Exception as broadcast_error:
+                    logger.error(f"Error broadcasting timeout error: {broadcast_error}")
+            
             return state
             
         except OllamaConnectionError as e:
@@ -197,6 +210,19 @@ def create_agent_node(
             )
             state = ConversationStateManager.add_message(state, error_message)
             state = ConversationStateManager.set_termination(state, "ollama_error")
+            
+            # Broadcast error to WebSocket
+            if websocket_manager:
+                try:
+                    await websocket_manager.broadcast({
+                        "type": "conversation_error",
+                        "error": str(e),
+                        "agent_id": agent_id,
+                        "error_type": "ollama_connection"
+                    })
+                except Exception as broadcast_error:
+                    logger.error(f"Error broadcasting connection error: {broadcast_error}")
+            
             return state
             
         except Exception as e:
@@ -211,6 +237,19 @@ def create_agent_node(
             )
             state = ConversationStateManager.add_message(state, error_message)
             state = ConversationStateManager.set_termination(state, "unexpected_error")
+            
+            # Broadcast error to WebSocket
+            if websocket_manager:
+                try:
+                    await websocket_manager.broadcast({
+                        "type": "conversation_error",
+                        "error": str(e),
+                        "agent_id": agent_id,
+                        "error_type": "unexpected"
+                    })
+                except Exception as broadcast_error:
+                    logger.error(f"Error broadcasting unexpected error: {broadcast_error}")
+            
             return state
     
     # Return the node function

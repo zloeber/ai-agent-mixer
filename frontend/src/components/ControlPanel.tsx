@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import websocketService from '../services/websocketService';
+import { displayConversationError } from '../utils/errorHandling';
 
 interface ControlPanelProps {
   onConversationStart?: () => void;
@@ -143,7 +144,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
 
     const unsubscribeError = websocketService.subscribe('conversation_error', (data: any) => {
       setStatus('terminated');
-      console.error('Conversation error:', data.error);
+      console.error('Conversation error:', data);
+      // Display error to user
+      displayConversationError(data);
     });
 
     return () => {

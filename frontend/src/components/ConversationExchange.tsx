@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import websocketService from '../services/websocketService';
+import { displayConversationError } from '../utils/errorHandling';
 
 interface Message {
   id: string;
@@ -70,10 +71,13 @@ const ConversationExchange: React.FC = () => {
       setIsTerminated(true);
     });
 
-    const unsubscribeError = websocketService.subscribe('conversation_error', () => {
+    const unsubscribeError = websocketService.subscribe('conversation_error', (data: any) => {
       setCurrentTurnAgent(null);
       setIsRunning(false);
       setIsTerminated(true);
+      // Display error to user
+      console.error('Conversation error:', data);
+      displayConversationError(data);
     });
 
     return () => {
