@@ -70,10 +70,13 @@ const ConversationExchange: React.FC = () => {
       setIsTerminated(true);
     });
 
-    const unsubscribeError = websocketService.subscribe('conversation_error', () => {
+    const unsubscribeError = websocketService.subscribe('conversation_error', (data: any) => {
       setCurrentTurnAgent(null);
       setIsRunning(false);
       setIsTerminated(true);
+      // Display error to user
+      console.error('Conversation error:', data);
+      alert(`Conversation Error: ${data.error || 'Unknown error occurred'}\n\nPlease check that Ollama is running and the configured models are available.`);
     });
 
     return () => {

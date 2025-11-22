@@ -143,7 +143,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
 
     const unsubscribeError = websocketService.subscribe('conversation_error', (data: any) => {
       setStatus('terminated');
-      console.error('Conversation error:', data.error);
+      console.error('Conversation error:', data);
+      // Display error to user
+      alert(`Conversation Error: ${data.error || 'Unknown error occurred'}\n\nPlease check that Ollama is running and the configured models are available.`);
     });
 
     return () => {
