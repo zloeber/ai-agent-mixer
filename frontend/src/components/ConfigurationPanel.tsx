@@ -575,8 +575,8 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
                     <div>
                       <h4 className="text-white font-semibold mb-2">Available Scenarios</h4>
                       <div className="space-y-2">
-                        {loadedConfig.conversations.map((conv: ConversationScenario, idx: number) => (
-                          <div key={idx} className="bg-gray-800 p-3 rounded border border-gray-700">
+                        {loadedConfig.conversations.map((conv: ConversationScenario) => (
+                          <div key={conv.name} className="bg-gray-800 p-3 rounded border border-gray-700">
                             <div className="font-semibold text-white mb-1">{conv.name}</div>
                             {conv.goal && <div className="text-gray-400 text-xs mb-2">{conv.goal}</div>}
                             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -626,8 +626,8 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
                     <h4 className="text-white font-semibold mb-2">Global MCP Servers</h4>
                     {loadedConfig.mcp_servers.global_servers && loadedConfig.mcp_servers.global_servers.length > 0 ? (
                       <div className="space-y-2">
-                        {loadedConfig.mcp_servers.global_servers.map((server: MCPServerConfig, idx: number) => (
-                          <div key={idx} className="bg-gray-800 p-3 rounded border border-gray-700">
+                        {loadedConfig.mcp_servers.global_servers.map((server: MCPServerConfig) => (
+                          <div key={server.name} className="bg-gray-800 p-3 rounded border border-gray-700">
                             <div className="flex items-center justify-between mb-2">
                               <span className="font-semibold text-white">{server.name}</span>
                               {mcpStatus[server.name] && (
