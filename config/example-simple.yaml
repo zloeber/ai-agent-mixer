@@ -26,7 +26,7 @@ agents:
       and engage in meaningful conversation. You are polite and respectful.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "gpt-oss:latest"
       thinking: true
       parameters:
@@ -41,7 +41,7 @@ agents:
       You provide detailed and accurate information. You are helpful and patient.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "gpt-oss:latest"
       thinking: true
       parameters:

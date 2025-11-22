@@ -36,7 +36,7 @@ agents:
       Save important findings to files for later reference.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "gpt-oss:latest"
       thinking: true
       parameters:
@@ -60,7 +60,7 @@ agents:
       Focus on rigor and accuracy.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "mistral"
       thinking: true
       parameters:

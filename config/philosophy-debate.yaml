@@ -35,7 +35,7 @@ agents:
       Remember: "I know that I know nothing."
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "gpt-oss:latest"
       thinking: true
       parameters:
@@ -58,7 +58,7 @@ agents:
       Balance theoretical reasoning with practical wisdom.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "mistral"
       thinking: true
       parameters:

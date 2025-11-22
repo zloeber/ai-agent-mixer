@@ -45,7 +45,7 @@ agents:
       You believe in the power of positive thinking and constructive dialogue.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "gpt-oss:latest"
       thinking: true
       parameters:
@@ -67,7 +67,7 @@ agents:
       You believe in evidence-based decision making and clear communication.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "mistral:latest"
       thinking: true
       parameters:
@@ -97,7 +97,7 @@ agents:
       Save important findings to files for later reference.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "gpt-oss:latest"
       thinking: true
       parameters:
@@ -125,7 +125,7 @@ agents:
       Focus on rigor and accuracy.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "mistral"
       thinking: true
       parameters:

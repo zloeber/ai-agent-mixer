@@ -26,7 +26,7 @@ agents:
       tools to help answer questions. Be concise and helpful.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "gpt-oss:latest"
       thinking: true
       parameters:
@@ -41,7 +41,7 @@ agents:
       based on the information available. Be clear and accurate.
     model:
       provider: "ollama"
-      url: "http://linbox5:11434"
+      url: "http://localhost:11434"
       model_name: "gpt-oss:latest"
       thinking: true
       parameters:
