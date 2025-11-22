@@ -3,6 +3,7 @@ import websocketService from '../services/websocketService';
 
 interface ControlPanelProps {
   onConversationStart?: () => void;
+  onScenarioChange?: () => void;
 }
 
 type ConversationStatus = 'idle' | 'starting' | 'running' | 'paused' | 'stopping' | 'terminated';
@@ -16,12 +17,12 @@ interface Scenario {
   agents_involved?: string[];
 }
 
-const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
+const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScenarioChange }) => {
   const [status, setStatus] = useState<ConversationStatus>('idle');
   const [currentCycle, setCurrentCycle] = useState(0);
   const [maxCycles, setMaxCycles] = useState(5);
   const [messageCount, setMessageCount] = useState(0);
-  const [startingAgent, setStartingAgent] = useState<'agent_a' | 'agent_b'>('agent_a');
+  const [startingAgent, setStartingAgent] = useState<string>('agent_a');
   const [configLoaded, setConfigLoaded] = useState(false);
   const [availableAgents, setAvailableAgents] = useState<string[]>(['agent_a', 'agent_b']);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -36,20 +37,38 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
           const data = await response.json();
           setConfigLoaded(data.config_loaded);
           
-          // Fetch scenarios if config is loaded
+          // Fetch scenarios and agent list if config is loaded
           if (data.config_loaded) {
             try {
+              // Fetch scenarios
               const scenariosResponse = await fetch('http://localhost:8000/api/conversation/scenarios');
+              let scenariosData: any = null;
               if (scenariosResponse.ok) {
-                const scenariosData = await scenariosResponse.json();
+                scenariosData = await scenariosResponse.json();
                 setScenarios(scenariosData.scenarios);
                 // Set default scenario if none selected
                 if (!selectedScenario && scenariosData.default) {
                   setSelectedScenario(scenariosData.default);
                 }
               }
+
+              // Fetch agent list from config
+              const configResponse = await fetch('http://localhost:8000/api/config/export');
+              if (configResponse.ok) {
+                const config = await configResponse.json();
+                if (config.agents) {
+                  const agentIds = Object.keys(config.agents);
+                  setAvailableAgents(agentIds);
+                  // Set starting agent from first scenario or first agent
+                  if (scenariosData && scenariosData.scenarios && scenariosData.scenarios.length > 0) {
+                    setStartingAgent(scenariosData.scenarios[0].starting_agent);
+                  } else if (agentIds.length > 0) {
+                    setStartingAgent(agentIds[0]);
+                  }
+                }
+              }
             } catch (error) {
-              console.error('Error fetching scenarios:', error);
+              console.error('Error fetching scenarios or agents:', error);
             }
           }
         }
@@ -259,7 +278,24 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
                   <label className="text-sm text-gray-400">Scenario:</label>
                   <select
                     value={selectedScenario || ''}
-                    onChange={(e) => setSelectedScenario(e.target.value || null)}
+                    onChange={(e) => {
+                      const newScenario = e.target.value || null;
+                      setSelectedScenario(newScenario);
+                      
+                      // Update starting agent and max cycles from selected scenario
+                      if (newScenario) {
+                        const scenario = scenarios.find(s => s.name === newScenario);
+                        if (scenario) {
+                          setStartingAgent(scenario.starting_agent);
+                          setMaxCycles(scenario.max_cycles);
+                        }
+                      }
+                      
+                      // Notify parent to reload agent configs
+                      if (onScenarioChange) {
+                        onScenarioChange();
+                      }
+                    }}
                     className="px-3 py-1 text-sm bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:border-blue-500"
                     disabled={!configLoaded}
                   >
@@ -276,7 +312,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
                 <label className="text-sm text-gray-400">Starting Agent:</label>
                 <select
                   value={startingAgent}
-                  onChange={(e) => setStartingAgent(e.target.value as 'agent_a' | 'agent_b')}
+                  onChange={(e) => setStartingAgent(e.target.value)}
                   className="px-2 py-1 text-sm bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:border-blue-500"
                   disabled={!configLoaded}
                 >

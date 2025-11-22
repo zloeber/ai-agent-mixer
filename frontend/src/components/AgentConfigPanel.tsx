@@ -5,6 +5,7 @@ interface AgentConfigPanelProps {
   agentId: string;
   agentName?: string;
   onConfigChange?: (agentId: string, config: AgentConfigData) => void;
+  configVersion?: number;
 }
 
 export interface AgentConfigData {
@@ -22,6 +23,9 @@ export interface AgentConfigData {
     };
   };
   mcp_servers: string[];
+  metadata: {
+    [key: string]: any;
+  };
 }
 
 // API configuration
@@ -30,19 +34,22 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({ 
   agentId, 
   agentName,
-  onConfigChange 
+  onConfigChange,
+  configVersion
 }) => {
   const [activeTab, setActiveTab] = useState<'console' | 'config'>('console');
   const [config, setConfig] = useState<AgentConfigData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [newMetadataKey, setNewMetadataKey] = useState('');
+  const [newMetadataValue, setNewMetadataValue] = useState('');
 
-  // Load agent configuration when switching to config tab
+  // Load agent configuration when switching to config tab or when configVersion changes
   useEffect(() => {
-    if (activeTab === 'config' && !config) {
+    if (activeTab === 'config') {
       loadAgentConfig();
     }
-  }, [activeTab]);
+  }, [activeTab, configVersion]);
 
   const loadAgentConfig = async () => {
     try {
@@ -51,7 +58,12 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
       if (response.ok) {
         const rootConfig = await response.json();
         if (rootConfig.agents && rootConfig.agents[agentId]) {
-          setConfig(rootConfig.agents[agentId]);
+          const agentConfig = rootConfig.agents[agentId];
+          // Ensure metadata exists
+          if (!agentConfig.metadata) {
+            agentConfig.metadata = {};
+          }
+          setConfig(agentConfig);
         }
       }
     } catch (error) {
@@ -84,6 +96,74 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
     setHasChanges(true);
     
     // Notify parent
+    if (onConfigChange) {
+      onConfigChange(agentId, updatedConfig);
+    }
+  };
+
+  const handleAddMetadata = () => {
+    if (!config || !newMetadataKey.trim()) return;
+    
+    const updatedConfig = { ...config };
+    if (!updatedConfig.metadata) {
+      updatedConfig.metadata = {};
+    }
+    
+    // Try to parse value as JSON, otherwise store as string
+    let parsedValue: any = newMetadataValue;
+    try {
+      parsedValue = JSON.parse(newMetadataValue);
+    } catch {
+      // Keep as string if not valid JSON
+    }
+    
+    updatedConfig.metadata[newMetadataKey.trim()] = parsedValue;
+    setConfig(updatedConfig);
+    setHasChanges(true);
+    setNewMetadataKey('');
+    setNewMetadataValue('');
+    
+    if (onConfigChange) {
+      onConfigChange(agentId, updatedConfig);
+    }
+  };
+
+  const handleRemoveMetadata = (key: string) => {
+    if (!config) return;
+    
+    const updatedConfig = { ...config };
+    if (updatedConfig.metadata) {
+      delete updatedConfig.metadata[key];
+    }
+    
+    setConfig(updatedConfig);
+    setHasChanges(true);
+    
+    if (onConfigChange) {
+      onConfigChange(agentId, updatedConfig);
+    }
+  };
+
+  const handleUpdateMetadata = (key: string, value: string) => {
+    if (!config) return;
+    
+    const updatedConfig = { ...config };
+    if (!updatedConfig.metadata) {
+      updatedConfig.metadata = {};
+    }
+    
+    // Try to parse value as JSON
+    let parsedValue: any = value;
+    try {
+      parsedValue = JSON.parse(value);
+    } catch {
+      // Keep as string if not valid JSON
+    }
+    
+    updatedConfig.metadata[key] = parsedValue;
+    setConfig(updatedConfig);
+    setHasChanges(true);
+    
     if (onConfigChange) {
       onConfigChange(agentId, updatedConfig);
     }
@@ -275,6 +355,67 @@ const AgentConfigPanel: React.FC<AgentConfigPanelProps> = ({
                       ))}
                     </ul>
                   )}
+                </div>
+              </div>
+
+              {/* Agent Metadata */}
+              <div className="border-t border-gray-700 pt-4">
+                <h4 className="text-sm font-semibold text-white mb-2">Metadata (Custom Attributes)</h4>
+                <div className="space-y-2">
+                  {config.metadata && Object.keys(config.metadata).length > 0 ? (
+                    <div className="space-y-2">
+                      {Object.entries(config.metadata).map(([key, value]) => (
+                        <div key={key} className="flex items-start space-x-2 bg-gray-800 p-2 rounded">
+                          <div className="flex-1">
+                            <div className="text-xs font-semibold text-gray-400 mb-1">{key}</div>
+                            <textarea
+                              value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+                              onChange={(e) => handleUpdateMetadata(key, e.target.value)}
+                              rows={typeof value === 'object' && value !== null ? 3 : 1}
+                              className="w-full px-2 py-1 text-xs bg-gray-900 text-white rounded border border-gray-700 focus:outline-none focus:border-blue-500 font-mono"
+                            />
+                          </div>
+                          <button
+                            onClick={() => handleRemoveMetadata(key)}
+                            className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded"
+                            title="Remove metadata"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-500 italic">No metadata attributes defined</div>
+                  )}
+                  
+                  {/* Add new metadata */}
+                  <div className="mt-3 pt-3 border-t border-gray-700">
+                    <div className="text-xs text-gray-400 mb-2">Add New Metadata</div>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={newMetadataKey}
+                        onChange={(e) => setNewMetadataKey(e.target.value)}
+                        placeholder="Key (e.g., expertise, style)"
+                        className="w-full px-2 py-1 text-xs bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:border-blue-500"
+                      />
+                      <textarea
+                        value={newMetadataValue}
+                        onChange={(e) => setNewMetadataValue(e.target.value)}
+                        placeholder='Value (string or JSON: ["item1", "item2"])'
+                        rows={2}
+                        className="w-full px-2 py-1 text-xs bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:border-blue-500 font-mono"
+                      />
+                      <button
+                        onClick={handleAddMetadata}
+                        disabled={!newMetadataKey.trim()}
+                        className="w-full px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        + Add Metadata
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
