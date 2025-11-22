@@ -5,15 +5,18 @@ metadata:
   description: "A basic two-agent conversation"
   author: "AI Agent Mixer"
 
-conversation:
-  starting_agent: "agent_a"
-  max_cycles: 5
-  turn_timeout: 120
-  termination_conditions:
-    keyword_triggers:
-      - "goodbye"
-      - "end conversation"
-    silence_detection: 3
+conversations:
+  - name: "Simple Conversation"
+    goal: "A friendly exchange between two AI assistants"
+    brevity: "medium"
+    starting_agent: "agent_a"
+    max_cycles: 5
+    turn_timeout: 120
+    termination_conditions:
+      keyword_triggers:
+        - "goodbye"
+        - "end conversation"
+      silence_detection: 3
 
 agents:
   agent_a:
@@ -23,9 +26,9 @@ agents:
       and engage in meaningful conversation. You are polite and respectful.
     model:
       provider: "ollama"
-      url: "http://localhost:11434"
-      model_name: "llama2"
-      thinking: false
+      url: "http://linbox5:11434"
+      model_name: "gpt-oss:latest"
+      thinking: true
       parameters:
         temperature: 0.7
         top_p: 0.9
@@ -38,9 +41,9 @@ agents:
       You provide detailed and accurate information. You are helpful and patient.
     model:
       provider: "ollama"
-      url: "http://localhost:11434"
-      model_name: "llama2"
-      thinking: false
+      url: "http://linbox5:11434"
+      model_name: "gpt-oss:latest"
+      thinking: true
       parameters:
         temperature: 0.7
         top_p: 0.9

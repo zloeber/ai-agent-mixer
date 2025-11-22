@@ -3,7 +3,7 @@
 import os
 import re
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import yaml
 from pydantic import ValidationError
@@ -86,14 +86,14 @@ def save_config(config: RootConfig, filepath: str) -> None:
         )
 
 
-def validate_config_yaml(yaml_content: str) -> Tuple[bool, List[str]]:
+def validate_config_yaml(yaml_content: str) -> Tuple[bool, List[Dict[str, str]]]:
     """Validate YAML configuration content.
     
     Args:
         yaml_content: String containing YAML configuration
         
     Returns:
-        Tuple of (is_valid, error_messages)
+        Tuple of (is_valid, error_objects) where each error has 'location' and 'message' keys
     """
     errors = []
     
@@ -105,7 +105,7 @@ def validate_config_yaml(yaml_content: str) -> Tuple[bool, List[str]]:
         data = yaml.safe_load(content)
         
         if data is None:
-            errors.append("Empty YAML content")
+            errors.append({"location": "root", "message": "Empty YAML content"})
             return False, errors
         
         # Validate with Pydantic
@@ -115,18 +115,18 @@ def validate_config_yaml(yaml_content: str) -> Tuple[bool, List[str]]:
         return True, []
         
     except yaml.YAMLError as e:
-        errors.append(f"YAML parsing error: {str(e)}")
+        errors.append({"location": "yaml", "message": f"YAML parsing error: {str(e)}"})
         return False, errors
         
     except ValidationError as e:
         for error in e.errors():
             loc = " -> ".join(str(l) for l in error['loc'])
             msg = error['msg']
-            errors.append(f"{loc}: {msg}")
+            errors.append({"location": loc, "message": msg})
         return False, errors
         
     except Exception as e:
-        errors.append(f"Unexpected error: {str(e)}")
+        errors.append({"location": "unknown", "message": f"Unexpected error: {str(e)}"})
         return False, errors
 
 

@@ -31,6 +31,10 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
         r"I think\.\.\.",
         r"Let me consider\.\.\.",
         r"Hmm\.\.\.",
+        r"…{3,}",  # Three or more ellipsis characters
+        r"\.{3,}",  # Three or more periods
+        r"[…\.]{10,}",  # Long sequences of ellipsis/periods
+        r"Scrolling[…\.]+",  # Scrolling with ellipsis
     ]
     
     def __init__(
@@ -96,6 +100,11 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
             return
         
         self.current_token = token
+        
+        # Check for excessive ellipsis patterns (treat as thinking)
+        if len(token.strip()) > 5 and all(c in '….' for c in token.strip()):
+            self.is_thinking = True
+            logger.debug(f"Agent {self.agent_id} detected ellipsis pattern, treating as thinking")
         
         # Check for thinking delimiters
         if "<thinking>" in token or "```thinking" in token or "[THINKING:" in token:
@@ -176,6 +185,12 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
             # Apply regex filters to remove any remaining thought patterns
             for pattern in self._thought_patterns:
                 response = pattern.sub("", response)
+            
+            # Additional cleanup for excessive punctuation
+            response = re.sub(r'…{3,}', '', response)  # Remove 3+ ellipsis
+            response = re.sub(r'\.{4,}', '...', response)  # Reduce 4+ periods to 3
+            response = re.sub(r'\n{3,}', '\n\n', response)  # Reduce excessive newlines
+            response = re.sub(r'[ \t]{3,}', ' ', response)  # Reduce excessive spaces
         
         return response.strip()
     

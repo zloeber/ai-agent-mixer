@@ -124,6 +124,20 @@ def create_agent_node(
             else:
                 response_content = response.content
             
+            # Additional cleanup for ellipsis patterns
+            import re
+            response_content = re.sub(r'…{3,}', '', response_content)  # Remove 3+ ellipsis chars
+            response_content = re.sub(r'\.{4,}', '...', response_content)  # Normalize periods
+            response_content = re.sub(r'Scrolling[…\.]+', '', response_content, flags=re.IGNORECASE)
+            response_content = re.sub(r'\n{3,}', '\n\n', response_content)  # Reduce blank lines
+            response_content = response_content.strip()
+            
+            # Skip if response is just punctuation or whitespace
+            if not response_content or len(response_content.strip('…. \n\t')) < 3:
+                logger.warning(f"Agent {agent_id} produced empty/invalid response, skipping")
+                # Return state without adding message
+                return state
+            
             # Create agent message
             agent_message = AgentMessage(
                 content=response_content,

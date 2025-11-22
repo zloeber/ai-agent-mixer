@@ -14,7 +14,7 @@ class CycleManager:
     """
     Manager for tracking conversation cycles and determining termination.
     
-    A cycle is completed when all agents have had at least one turn.
+    A cycle is completed after each agent turn (one prompt exchange).
     """
     
     def __init__(
@@ -35,8 +35,7 @@ class CycleManager:
         self.max_cycles = max_cycles
         self.termination_conditions = termination_conditions or TerminationConditions()
         
-        # Track which agents have spoken in current cycle
-        self.agents_spoken_this_cycle: set[str] = set()
+        # Track cycle count - increments after each agent turn
         self.cycles_completed = 0
         
         # For silence detection
@@ -47,44 +46,49 @@ class CycleManager:
             f"max {max_cycles} cycles"
         )
     
-    def register_agent_turn(self, agent_id: str) -> None:
+    def register_agent_turn(self, agent_id: str) -> int:
         """
-        Register that an agent has taken a turn.
+        Register that an agent has taken a turn and increment cycle.
         
         Args:
             agent_id: ID of agent that just spoke
-        """
-        if agent_id in self.agent_ids:
-            self.agents_spoken_this_cycle.add(agent_id)
-            logger.debug(
-                f"Agent {agent_id} registered. "
-                f"{len(self.agents_spoken_this_cycle)}/{len(self.agent_ids)} agents spoken"
-            )
-    
-    def is_cycle_complete(self) -> bool:
-        """
-        Check if current cycle is complete (all agents have spoken).
-        
-        Returns:
-            True if all agents have spoken at least once
-        """
-        return self.agents_spoken_this_cycle == self.agent_ids
-    
-    def complete_cycle(self) -> int:
-        """
-        Mark current cycle as complete and prepare for next cycle.
-        
+            
         Returns:
             The cycle number that just completed
         """
-        if self.is_cycle_complete():
+        if agent_id in self.agent_ids:
             self.cycles_completed += 1
-            self.agents_spoken_this_cycle.clear()
-            logger.info(f"Cycle {self.cycles_completed} completed")
+            logger.info(f"Agent {agent_id} completed turn. Cycle {self.cycles_completed} completed")
             return self.cycles_completed
         else:
-            logger.warning("complete_cycle called but cycle not complete")
+            logger.warning(f"Unknown agent {agent_id} attempted to register turn")
             return self.cycles_completed
+    
+    def is_cycle_complete(self) -> bool:
+        """
+        Check if current cycle is complete.
+        
+        Note: With the new model, each agent turn completes a cycle,
+        so this always returns True after register_agent_turn is called.
+        Kept for backwards compatibility.
+        
+        Returns:
+            True (always, for backwards compatibility)
+        """
+        return True
+    
+    def complete_cycle(self) -> int:
+        """
+        Mark current cycle as complete.
+        
+        Note: With the new model, cycles are auto-completed in register_agent_turn.
+        This method is kept for backwards compatibility.
+        
+        Returns:
+            The current cycle number
+        """
+        logger.debug(f"complete_cycle called (cycle already completed at {self.cycles_completed})")
+        return self.cycles_completed
     
     def check_termination(self, state: ConversationState) -> Tuple[bool, Optional[str]]:
         """
@@ -195,7 +199,6 @@ class CycleManager:
     
     def reset(self) -> None:
         """Reset cycle tracking."""
-        self.agents_spoken_this_cycle.clear()
         self.cycles_completed = 0
         self.last_substantive_cycle = 0
         logger.debug("CycleManager reset")

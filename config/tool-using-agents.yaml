@@ -6,15 +6,18 @@ metadata:
   author: "AI Agent Mixer"
   tags: ["research", "tools", "collaboration", "mcp"]
 
-conversation:
-  starting_agent: "researcher"
-  max_cycles: 20
-  turn_timeout: 600
-  termination_conditions:
-    keyword_triggers:
-      - "research complete"
-      - "final report ready"
-    silence_detection: 5
+conversations:
+  - name: "Research Collaboration"
+    goal: "Agents use tools to research a topic, verify findings, and synthesize insights"
+    brevity: "medium"
+    starting_agent: "researcher"
+    max_cycles: 20
+    turn_timeout: 600
+    termination_conditions:
+      keyword_triggers:
+        - "research complete"
+        - "final report ready"
+      silence_detection: 5
 
 agents:
   researcher:
@@ -33,8 +36,8 @@ agents:
       Save important findings to files for later reference.
     model:
       provider: "ollama"
-      url: "http://localhost:11434"
-      model_name: "llama2:13b"
+      url: "http://linbox5:11434"
+      model_name: "gpt-oss:latest"
       thinking: true
       parameters:
         temperature: 0.3
@@ -57,7 +60,7 @@ agents:
       Focus on rigor and accuracy.
     model:
       provider: "ollama"
-      url: "http://localhost:11434"
+      url: "http://linbox5:11434"
       model_name: "mistral"
       thinking: true
       parameters:

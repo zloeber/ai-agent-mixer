@@ -169,13 +169,15 @@ class TestCycleManager:
             max_cycles=5,
         )
 
-        # Register agent_a turn
-        manager.register_agent_turn("agent_a")
-        assert not manager.is_cycle_complete()
+        # Register agent_a turn - completes cycle 1
+        cycle_num = manager.register_agent_turn("agent_a")
+        assert cycle_num == 1
+        assert manager.cycles_completed == 1
 
-        # Register agent_b turn
-        manager.register_agent_turn("agent_b")
-        assert manager.is_cycle_complete()
+        # Register agent_b turn - completes cycle 2
+        cycle_num = manager.register_agent_turn("agent_b")
+        assert cycle_num == 2
+        assert manager.cycles_completed == 2
 
     def test_complete_cycle(self) -> None:
         """Test completing a cycle."""
@@ -184,15 +186,14 @@ class TestCycleManager:
             max_cycles=5,
         )
 
-        # Register both agents
+        # Register agent - cycle auto-completes
         manager.register_agent_turn("agent_a")
-        manager.register_agent_turn("agent_b")
-
-        # Complete cycle
+        assert manager.cycles_completed == 1
+        
+        # Complete cycle returns current cycle number
         cycle_num = manager.complete_cycle()
         assert cycle_num == 1
         assert manager.cycles_completed == 1
-        assert not manager.is_cycle_complete()  # Reset for next cycle
 
     def test_max_cycles_termination(self) -> None:
         """Test termination when max cycles reached."""
@@ -208,19 +209,13 @@ class TestCycleManager:
             "should_terminate": False,
         }
 
-        # Complete first cycle
+        # Agent A turn - cycle 1 complete
         manager.register_agent_turn("agent_a")
-        manager.register_agent_turn("agent_b")
-        manager.complete_cycle()
-
         should_terminate, reason = manager.check_termination(state)
         assert should_terminate is False
 
-        # Complete second cycle
-        manager.register_agent_turn("agent_a")
+        # Agent B turn - cycle 2 complete (max reached)
         manager.register_agent_turn("agent_b")
-        manager.complete_cycle()
-
         should_terminate, reason = manager.check_termination(state)
         assert should_terminate is True
         assert reason == "max_cycles_reached"
@@ -435,22 +430,22 @@ class TestMultiCycleConversation:
             max_cycles=5,
         )
 
-        # Cycle 1
+        # Each agent turn completes a cycle
         manager.register_agent_turn("agent_a")
-        manager.register_agent_turn("agent_b")
-        manager.register_agent_turn("agent_c")
-        assert manager.is_cycle_complete()
-        manager.complete_cycle()
         assert manager.cycles_completed == 1
-
-        # Cycle 2
-        manager.register_agent_turn("agent_a")
+        
         manager.register_agent_turn("agent_b")
-        assert not manager.is_cycle_complete()
-        manager.register_agent_turn("agent_c")
-        assert manager.is_cycle_complete()
-        manager.complete_cycle()
         assert manager.cycles_completed == 2
+        
+        manager.register_agent_turn("agent_c")
+        assert manager.cycles_completed == 3
+        
+        # Continue with more turns
+        manager.register_agent_turn("agent_a")
+        assert manager.cycles_completed == 4
+        
+        manager.register_agent_turn("agent_b")
+        assert manager.cycles_completed == 5
 
     def test_early_termination_prevents_continuation(self) -> None:
         """Test that early termination stops conversation."""

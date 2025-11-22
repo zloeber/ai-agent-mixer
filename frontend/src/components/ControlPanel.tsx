@@ -7,6 +7,15 @@ interface ControlPanelProps {
 
 type ConversationStatus = 'idle' | 'starting' | 'running' | 'paused' | 'stopping' | 'terminated';
 
+interface Scenario {
+  name: string;
+  goal: string;
+  brevity: string;
+  max_cycles: number;
+  starting_agent: string;
+  agents_involved?: string[];
+}
+
 const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
   const [status, setStatus] = useState<ConversationStatus>('idle');
   const [currentCycle, setCurrentCycle] = useState(0);
@@ -15,8 +24,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
   const [startingAgent, setStartingAgent] = useState<'agent_a' | 'agent_b'>('agent_a');
   const [configLoaded, setConfigLoaded] = useState(false);
   const [availableAgents, setAvailableAgents] = useState<string[]>(['agent_a', 'agent_b']);
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
 
-  // Check if configuration is loaded
+  // Check if configuration is loaded and fetch scenarios
   useEffect(() => {
     const checkConfig = async () => {
       try {
@@ -24,6 +35,23 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
         if (response.ok) {
           const data = await response.json();
           setConfigLoaded(data.config_loaded);
+          
+          // Fetch scenarios if config is loaded
+          if (data.config_loaded) {
+            try {
+              const scenariosResponse = await fetch('http://localhost:8000/api/conversation/scenarios');
+              if (scenariosResponse.ok) {
+                const scenariosData = await scenariosResponse.json();
+                setScenarios(scenariosData.scenarios);
+                // Set default scenario if none selected
+                if (!selectedScenario && scenariosData.default) {
+                  setSelectedScenario(scenariosData.default);
+                }
+              }
+            } catch (error) {
+              console.error('Error fetching scenarios:', error);
+            }
+          }
         }
       } catch (error) {
         console.error('Error checking config:', error);
@@ -34,7 +62,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
     const interval = setInterval(checkConfig, 3000); // Check every 3 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedScenario]);
 
   // Subscribe to WebSocket events
   useEffect(() => {
@@ -95,7 +123,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
     setStatus('starting');
 
     try {
-      const response = await fetch('http://localhost:8000/api/conversation/start', {
+      // Build URL with optional scenario parameter
+      const url = new URL('http://localhost:8000/api/conversation/start');
+      if (selectedScenario) {
+        url.searchParams.append('scenario', selectedScenario);
+      }
+      
+      const response = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -131,24 +165,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
       }
     } catch (error) {
       console.error('Error stopping conversation:', error);
-    }
-  };
-
-  const handlePauseResume = async () => {
-    const endpoint = status === 'paused' ? '/api/conversation/resume' : '/api/conversation/pause';
-
-    try {
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (!response.ok) {
-        console.error('Failed to toggle pause/resume');
-      }
-      // Status will be updated via WebSocket event
-    } catch (error) {
-      console.error('Error toggling pause:', error);
     }
   };
 
@@ -192,7 +208,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
 
   const canStart = configLoaded && (status === 'idle' || status === 'terminated');
   const canStop = status === 'running' || status === 'paused';
-  const canPause = status === 'running' || status === 'paused';
 
   return (
     <div className="bg-gray-950 border-b border-gray-700 p-4">
@@ -231,6 +246,25 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
           {/* Configuration Overrides */}
           {status === 'idle' && (
             <>
+              {/* Scenario Selector */}
+              {scenarios.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm text-gray-400">Scenario:</label>
+                  <select
+                    value={selectedScenario || ''}
+                    onChange={(e) => setSelectedScenario(e.target.value || null)}
+                    className="px-3 py-1 text-sm bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:border-blue-500"
+                    disabled={!configLoaded}
+                  >
+                    {scenarios.map(scenario => (
+                      <option key={scenario.name} value={scenario.name}>
+                        {scenario.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-gray-400">Starting Agent:</label>
                 <select
@@ -267,14 +301,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart }) => {
             className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ▶️ Start
-          </button>
-
-          <button
-            onClick={handlePauseResume}
-            disabled={!canPause}
-            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {status === 'paused' ? '▶️ Resume' : '⏸️ Pause'}
           </button>
 
           <button

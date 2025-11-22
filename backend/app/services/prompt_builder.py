@@ -47,7 +47,8 @@ class PromptBuilder:
                 "agent": {
                     "name": agent_config.name,
                     "persona": agent_config.persona,
-                    "model": agent_config.model.model_name
+                    "model": agent_config.model.model_name,
+                    "metadata": agent_config.metadata
                 }
             }
             

@@ -1,0 +1,164 @@
+version: "1.0"
+
+metadata:
+  name: "Multi-Scenario Agent Exchange"
+  description: "Demonstrates multiple conversation scenarios with different goals and agent combinations"
+
+# Define all available agents
+agents:
+  researcher:
+    name: "Research Assistant"
+    persona: "Academic researcher who analyzes topics systematically, cites facts, and seeks evidence-based conclusions"
+    model:
+      url: "http://localhost:11434"
+      model_name: "llama3.2:latest"
+      temperature: 0.7
+      max_tokens: 500
+    metadata:
+      expertise: ["research", "data analysis", "academic writing"]
+      style: "analytical and methodical"
+  
+  analyst:
+    name: "Strategic Analyst"
+    persona: "Business analyst who identifies practical implications, ROI considerations, and real-world applications"
+    model:
+      url: "http://localhost:11434"
+      model_name: "mistral:latest"
+      temperature: 0.7
+      max_tokens: 500
+    metadata:
+      expertise: ["business strategy", "market analysis", "implementation"]
+      style: "pragmatic and business-focused"
+  
+  optimist:
+    name: "Optimistic Thinker"
+    persona: "Enthusiastic visionary who sees potential, opportunities, and positive outcomes in every situation"
+    model:
+      url: "http://localhost:11434"
+      model_name: "llama3.2:latest"
+      temperature: 0.8
+      max_tokens: 400
+    metadata:
+      perspective: "opportunity-focused"
+      traits: ["enthusiastic", "forward-thinking", "innovative"]
+  
+  realist:
+    name: "Pragmatic Realist"
+    persona: "Grounded pragmatist who considers constraints, risks, and practical limitations with a balanced view"
+    model:
+      url: "http://localhost:11434"
+      model_name: "mistral:latest"
+      temperature: 0.6
+      max_tokens: 400
+    metadata:
+      perspective: "risk-aware"
+      traits: ["practical", "cautious", "balanced"]
+
+# Define multiple conversation scenarios
+conversations:
+  # Scenario 1: Research-focused exchange
+  - name: "Research and Synthesis"
+    goal: "Explore a complex topic through systematic research and strategic analysis. The researcher provides evidence-based insights while the analyst identifies practical applications and business implications."
+    brevity: "medium"
+    max_cycles: 10
+    starting_agent: "researcher"
+    agents_involved:
+      - researcher
+      - analyst
+    turn_timeout: 120
+    termination_conditions:
+      keyword_triggers:
+        - "research complete"
+        - "synthesis complete"
+        - "conclusion"
+        - "final summary"
+  
+  # Scenario 2: Debate between opposites
+  - name: "Opposites Debate"
+    goal: "Engage in a spirited debate exploring both optimistic possibilities and pragmatic concerns. Each agent presents their perspective clearly while acknowledging the other's valid points."
+    brevity: "low"
+    max_cycles: 12
+    starting_agent: "optimist"
+    agents_involved:
+      - optimist
+      - realist
+    turn_timeout: 90
+    termination_conditions:
+      keyword_triggers:
+        - "agree to disagree"
+        - "finding middle ground"
+        - "balanced conclusion"
+        - "compromise reached"
+  
+  # Scenario 3: All-hands strategic discussion
+  - name: "Strategic Roundtable"
+    goal: "Conduct a comprehensive strategic discussion with all perspectives represented. Research provides facts, analysis shows business implications, optimist identifies opportunities, and realist evaluates feasibility."
+    brevity: "medium"
+    max_cycles: 15
+    starting_agent: "researcher"
+    # No agents_involved means all agents participate
+    turn_timeout: 120
+    termination_conditions:
+      keyword_triggers:
+        - "strategic plan complete"
+        - "all perspectives covered"
+        - "consensus reached"
+        - "recommendations finalized"
+
+# Conversation initialization
+initialization:
+  first_message: "Let's discuss the implications of artificial intelligence in modern education. How is AI transforming learning experiences, what are the opportunities and challenges, and what does the research tell us?"
+  
+  system_prompt_template: |
+    You are {{ agent.name }}, {{ agent.persona }}.
+    
+    ## Conversation Context
+    Scenario: {{ conversation.scenario_name }}
+    Goal: {{ conversation.goal }}
+    Response Length: Keep your responses {{ conversation.brevity }} ({{ conversation.brevity == "short" and "2-3 sentences" or "4-6 sentences" }}).
+    
+    {% if agent.metadata %}
+    ## Your Profile
+    {% if agent.metadata.expertise %}
+    Expertise: {{ agent.metadata.expertise | join(", ") }}
+    {% endif %}
+    {% if agent.metadata.style %}
+    Communication Style: {{ agent.metadata.style }}
+    {% endif %}
+    {% if agent.metadata.perspective %}
+    Perspective: {{ agent.metadata.perspective }}
+    {% endif %}
+    {% if agent.metadata.traits %}
+    Key Traits: {{ agent.metadata.traits | join(", ") }}
+    {% endif %}
+    {% endif %}
+    
+    ## Instructions
+    - Stay in character and maintain your unique perspective
+    - Build on previous messages in the conversation
+    - Be concise but substantive - every response should add value
+    - When appropriate, reference specific points made by other agents
+    - Use your expertise to bring unique insights
+    {% if conversation.brevity == "short" %}
+    - Keep responses crisp and focused (2-3 sentences maximum)
+    {% elif conversation.brevity == "medium" %}
+    - Balance depth with brevity (4-6 sentences typically)
+    {% else %}
+    - Provide thorough analysis when needed (6-10 sentences)
+    {% endif %}
+    
+    ## Termination
+    When you feel the conversation has reached a natural conclusion for this scenario, you may use one of these phrases:
+    {% for keyword in conversation.termination_conditions.keyword_triggers %}
+    - "{{ keyword }}"
+    {% endfor %}
+
+# MCP server configuration (optional)
+mcp_servers:
+  global_servers: []
+
+# Logging configuration
+logging:
+  level: "INFO"
+  include_thoughts: true
+  output_directory: "./logs"

@@ -16,7 +16,11 @@ const ConversationExchange: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentCycle, setCurrentCycle] = useState(0);
   const [currentTurnAgent, setCurrentTurnAgent] = useState<string | null>(null);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [isTerminated, setIsTerminated] = useState(false);
+  const [conversationStarted, setConversationStarted] = useState(false);
+  const [maxCycles, setMaxCycles] = useState(0);
+  const [shouldAutoRun, setShouldAutoRun] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -45,33 +49,78 @@ const ConversationExchange: React.FC = () => {
       setCurrentTurnAgent(data.agent_id);
     });
 
-    const unsubscribeStatus = websocketService.subscribe('conversation_status', (data: any) => {
-      if (data.status === 'paused') {
-        setIsPaused(true);
-      } else if (data.status === 'resumed') {
-        setIsPaused(false);
-      }
-    });
-
     const unsubscribeStarted = websocketService.subscribe('conversation_started', (data: any) => {
       setMessages([]);
       setCurrentCycle(0);
       setCurrentTurnAgent(data.starting_agent);
-      setIsPaused(false);
+      setIsRunning(true);
+      setIsTerminated(false);
+      setConversationStarted(true);
+      setMaxCycles(data.max_cycles || 0);
+      
+      // Trigger auto-run
+      setShouldAutoRun(true);
     });
 
     const unsubscribeEnded = websocketService.subscribe('conversation_ended', () => {
       setCurrentTurnAgent(null);
+      setIsRunning(false);
+      setIsTerminated(true);
+    });
+
+    const unsubscribeError = websocketService.subscribe('conversation_error', () => {
+      setCurrentTurnAgent(null);
+      setIsRunning(false);
+      setIsTerminated(true);
     });
 
     return () => {
       unsubscribeMessage();
       unsubscribeTurn();
-      unsubscribeStatus();
       unsubscribeStarted();
       unsubscribeEnded();
+      unsubscribeError();
     };
   }, []);
+
+  // Auto-run conversation after it starts
+  useEffect(() => {
+    if (shouldAutoRun) {
+      setShouldAutoRun(false);
+      // Small delay to ensure state is settled
+      const timer = setTimeout(async () => {
+        try {
+          setIsRunning(true);
+          const response = await fetch('http://localhost:8000/api/conversation/continue?cycles=1', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (!response.ok) {
+            const error = await response.json();
+            console.error('Failed to auto-continue conversation:', error);
+            setIsRunning(false);
+          } else {
+            const result = await response.json();
+            console.log('Auto-continued conversation:', result);
+            
+            if (result.terminated) {
+              setIsRunning(false);
+              setIsTerminated(true);
+              setCurrentTurnAgent(null);
+            } else {
+              setIsRunning(false);
+            }
+          }
+        } catch (error) {
+          console.error('Error auto-continuing conversation:', error);
+          setIsRunning(false);
+        }
+      }, 200);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [shouldAutoRun]);
 
   const exportConversation = () => {
     // Create markdown format
@@ -102,20 +151,36 @@ const ConversationExchange: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const togglePause = async () => {
+  const runCycles = async (cycles: number) => {
     try {
-      const endpoint = isPaused ? '/api/conversation/resume' : '/api/conversation/pause';
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
+      setIsRunning(true);
+      const response = await fetch(`http://localhost:8000/api/conversation/continue?cycles=${cycles}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
       
       if (!response.ok) {
-        console.error('Failed to toggle pause');
+        const error = await response.json();
+        console.error('Failed to continue conversation:', error);
+        alert(`Failed to continue: ${error.detail}`);
+        setIsRunning(false);
+      } else {
+        const result = await response.json();
+        console.log('Continued conversation:', result);
+        
+        // Update state based on response
+        if (result.terminated) {
+          setIsRunning(false);
+          setIsTerminated(true);
+          setCurrentTurnAgent(null);
+        } else {
+          setIsRunning(false);
+        }
       }
-      // Status will be updated via WebSocket event
     } catch (error) {
-      console.error('Error toggling pause:', error);
+      console.error('Error continuing conversation:', error);
+      alert('Failed to continue conversation');
+      setIsRunning(false);
     }
   };
 
@@ -139,22 +204,66 @@ const ConversationExchange: React.FC = () => {
           <div className="flex items-center space-x-4">
             <div className="text-sm text-gray-400">
               Cycle: <span className="text-white font-semibold">{currentCycle}</span>
+              {maxCycles > 0 && <span className="text-gray-500"> / {maxCycles}</span>}
             </div>
             {currentTurnAgent && (
               <div className="text-sm text-yellow-400">
                 🔄 {currentTurnAgent}'s turn
               </div>
             )}
-            <button
-              onClick={togglePause}
-              className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={messages.length === 0}
-            >
-              {isPaused ? '▶️ Resume' : '⏸️ Pause'}
-            </button>
+            
+            {/* Cycle Control Buttons - show when conversation started and not terminated */}
+            {conversationStarted && !isTerminated && (
+              <div className="flex items-center space-x-2 border-l border-gray-600 pl-4">
+                <span className="text-xs text-gray-400">Run:</span>
+                <button
+                  onClick={() => runCycles(1)}
+                  disabled={isRunning}
+                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Run 1 cycle"
+                >
+                  +1
+                </button>
+                <button
+                  onClick={() => runCycles(5)}
+                  disabled={isRunning}
+                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Run 5 cycles"
+                >
+                  +5
+                </button>
+                <button
+                  onClick={() => runCycles(10)}
+                  disabled={isRunning}
+                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Run 10 cycles"
+                >
+                  +10
+                </button>
+                <button
+                  onClick={() => runCycles(maxCycles - currentCycle)}
+                  disabled={isRunning || maxCycles <= currentCycle}
+                  className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Run to completion"
+                >
+                  ▶️ All
+                </button>
+                {isRunning && (
+                  <span className="text-xs text-yellow-400 animate-pulse">Running...</span>
+                )}
+              </div>
+            )}
+            
+            {/* Show terminated status */}
+            {isTerminated && (
+              <div className="text-sm text-green-400 border-l border-gray-600 pl-4">
+                ✓ Conversation Complete
+              </div>
+            )}
+            
             <button
               onClick={exportConversation}
-              className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={messages.length === 0}
             >
               📥 Export
@@ -177,19 +286,24 @@ const ConversationExchange: React.FC = () => {
           <>
             {messages.map((msg) => {
               const isCurrentTurn = currentTurnAgent === msg.agent_id;
+              // Determine if this is the left agent (first agent that appears)
+              const firstAgentId = messages[0]?.agent_id;
+              const isLeftAgent = msg.agent_id === firstAgentId;
+              
+              // Assign darker, distinct colors for each agent
+              const agentColor = isLeftAgent
+                ? 'bg-slate-700 text-gray-100'
+                : 'bg-indigo-900 text-gray-100';
+              
               return (
                 <div
                   key={msg.id}
-                  className={`flex ${
-                    msg.agent_id === 'agent_a' ? 'justify-start' : 'justify-end'
-                  }`}
+                  className={`flex ${isLeftAgent ? 'justify-start' : 'justify-end'}`}
                 >
                   <div
-                    className={`max-w-[70%] rounded-lg p-4 ${
-                      msg.agent_id === 'agent_a'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-green-600 text-white'
-                    } ${isCurrentTurn ? 'ring-2 ring-yellow-400' : ''}`}
+                    className={`max-w-[70%] rounded-lg p-4 ${agentColor} ${
+                      isCurrentTurn ? 'ring-2 ring-yellow-400' : ''
+                    }`}
                   >
                     <div className="flex items-center space-x-2 mb-2">
                       <span className="font-semibold text-sm">{msg.agent_name}</span>

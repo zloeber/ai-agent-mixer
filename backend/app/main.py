@@ -4,7 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
@@ -314,11 +314,18 @@ async def import_config(config_dict: Dict[str, Any]):
             # Start health monitoring if not already running
             await mcp_manager.start_health_monitoring()
         
+        # Get starting agent from either conversation or conversations[0]
+        starting_agent = None
+        if config.conversation:
+            starting_agent = config.conversation.starting_agent
+        elif config.conversations:
+            starting_agent = config.conversations[0].starting_agent
+        
         return {
             "status": "success",
             "message": "Configuration imported successfully",
             "agents": list(config.agents.keys()),
-            "starting_agent": config.conversation.starting_agent,
+            "starting_agent": starting_agent,
             "mcp_servers": {
                 "started": started_servers,
                 "failed": failed_servers,
@@ -346,7 +353,7 @@ async def export_config():
 
 
 @app.post("/api/config/validate")
-async def validate_config(yaml_content: str):
+async def validate_config(yaml_content: str = Body(..., media_type="text/plain")):
     """Validate YAML configuration content.
     
     Args:
@@ -408,11 +415,18 @@ async def upload_config_file(file: UploadFile = File(...)):
         logger = get_logger(__name__)
         logger.info(f"Configuration uploaded from file: {file.filename}")
         
+        # Get starting agent from either conversation or conversations[0]
+        starting_agent = None
+        if config.conversation:
+            starting_agent = config.conversation.starting_agent
+        elif config.conversations:
+            starting_agent = config.conversations[0].starting_agent
+        
         return {
             "status": "success",
             "message": f"Configuration from {file.filename} imported successfully",
             "agents": list(config.agents.keys()),
-            "starting_agent": config.conversation.starting_agent,
+            "starting_agent": starting_agent,
         }
         
     except Exception as e:
@@ -542,9 +556,50 @@ async def test_ollama_connection(model_config: ModelConfig):
 
 
 # Conversation management endpoints
+@app.get("/api/conversation/scenarios")
+async def list_scenarios():
+    """List available conversation scenarios.
+    
+    Returns:
+        List of available scenarios
+    """
+    if app_state["config"] is None:
+        raise HTTPException(status_code=400, detail="No configuration loaded")
+    
+    try:
+        config = app_state["config"]
+        scenarios = config.list_scenarios()
+        
+        # Build detailed scenario info
+        scenario_list = []
+        for scenario_name in scenarios:
+            scenario_config = config.get_conversation_config(scenario_name)
+            scenario_list.append({
+                "name": scenario_name,
+                "goal": scenario_config.goal,
+                "brevity": scenario_config.brevity,
+                "max_cycles": scenario_config.max_cycles,
+                "starting_agent": scenario_config.starting_agent,
+                "agents_involved": scenario_config.agents_involved
+            })
+        
+        return {
+            "scenarios": scenario_list,
+            "default": scenarios[0] if scenarios else None
+        }
+        
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.error(f"Error listing scenarios: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/conversation/start")
-async def start_conversation():
+async def start_conversation(scenario: str | None = None):
     """Start a new conversation.
+    
+    Args:
+        scenario: Optional scenario name to use (None = first/default)
     
     Returns:
         Conversation metadata
@@ -558,10 +613,11 @@ async def start_conversation():
     try:
         logger = get_logger(__name__)
         
-        # Create orchestrator
+        # Create orchestrator with scenario selection
         orchestrator = ConversationOrchestrator(
             config=app_state["config"],
-            websocket_manager=connection_manager
+            websocket_manager=connection_manager,
+            scenario_name=scenario
         )
         
         # Start conversation
@@ -572,14 +628,15 @@ async def start_conversation():
         app_state["conversation_running"] = True
         app_state["metrics"]["conversations_started"] += 1
         
-        logger.info(f"Conversation started: {metadata['conversation_id']}")
+        scenario_info = f" (scenario: {scenario})" if scenario else ""
+        logger.info(f"Conversation started: {metadata['conversation_id']}{scenario_info}")
         
-        # Run conversation in background
-        import asyncio
-        asyncio.create_task(_run_conversation_background())
+        # Note: Don't auto-run conversation, wait for continue command
+        # This allows step-by-step execution
         
         return {
             "status": "started",
+            "scenario": scenario,
             **metadata
         }
         
@@ -679,6 +736,55 @@ async def resume_conversation():
         "status": "resumed",
         "message": "Conversation resumed"
     }
+
+
+@app.post("/api/conversation/continue")
+async def continue_conversation(cycles: int = 1):
+    """Continue conversation for a specific number of cycles.
+    
+    Args:
+        cycles: Number of cycles to run (default: 1)
+    
+    Returns:
+        Continuation result with updated state
+    """
+    logger = get_logger(__name__)
+    
+    if app_state["config"] is None:
+        raise HTTPException(status_code=400, detail="No configuration loaded")
+    
+    orchestrator = app_state.get("orchestrator")
+    if orchestrator is None:
+        raise HTTPException(status_code=400, detail="No conversation started. Start a conversation first.")
+    
+    if cycles < 1 or cycles > 100:
+        raise HTTPException(status_code=400, detail="Cycles must be between 1 and 100")
+    
+    try:
+        # Mark as running if not already
+        app_state["conversation_running"] = True
+        
+        # Run specified number of cycles
+        final_state = await orchestrator.run_cycles(num_cycles=cycles)
+        
+        # Check if conversation ended
+        if final_state.get("should_terminate", False):
+            app_state["conversation_running"] = False
+            app_state["metrics"]["conversations_completed"] += 1
+            logger.info(f"Conversation completed after continuing {cycles} cycles")
+        
+        return {
+            "status": "continued",
+            "cycles_run": cycles,
+            "current_cycle": final_state["current_cycle"],
+            "terminated": final_state.get("should_terminate", False),
+            "termination_reason": final_state.get("termination_reason"),
+            "message_count": len(final_state["messages"])
+        }
+        
+    except Exception as e:
+        logger.error(f"Error continuing conversation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/conversation/status")

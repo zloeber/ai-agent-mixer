@@ -6,15 +6,18 @@ metadata:
   author: "AI Agent Mixer"
   tags: ["philosophy", "debate", "consciousness", "socratic"]
 
-conversation:
-  starting_agent: "socrates"
-  max_cycles: 15
-  turn_timeout: 300
-  termination_conditions:
-    keyword_triggers:
-      - "we have reached agreement"
-      - "this concludes our dialogue"
-    silence_detection: 4
+conversations:
+  - name: "Socratic Dialogue"
+    goal: "Engage in philosophical inquiry about consciousness using the Socratic method"
+    brevity: "medium"
+    starting_agent: "socrates"
+    max_cycles: 15
+    turn_timeout: 300
+    termination_conditions:
+      keyword_triggers:
+        - "we have reached agreement"
+        - "this concludes our dialogue"
+      silence_detection: 4
 
 agents:
   socrates:
@@ -32,8 +35,8 @@ agents:
       Remember: "I know that I know nothing."
     model:
       provider: "ollama"
-      url: "http://localhost:11434"
-      model_name: "llama2"
+      url: "http://linbox5:11434"
+      model_name: "gpt-oss:latest"
       thinking: true
       parameters:
         temperature: 0.6
@@ -55,7 +58,7 @@ agents:
       Balance theoretical reasoning with practical wisdom.
     model:
       provider: "ollama"
-      url: "http://localhost:11434"
+      url: "http://linbox5:11434"
       model_name: "mistral"
       thinking: true
       parameters:

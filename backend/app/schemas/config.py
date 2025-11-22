@@ -2,7 +2,7 @@
 
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 import re
 
 
@@ -74,6 +74,10 @@ class AgentConfig(BaseModel):
         default_factory=list,
         description="List of agent-specific MCP server names"
     )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Custom metadata attributes for use in templates and prompts"
+    )
 
 
 class TerminationConditions(BaseModel):
@@ -88,8 +92,18 @@ class TerminationConditions(BaseModel):
     )
 
 
-class ConversationConfig(BaseModel):
-    """Configuration for conversation orchestration."""
+class ConversationScenario(BaseModel):
+    """Configuration for a single conversation scenario."""
+    name: str = Field(..., description="Name of the conversation scenario")
+    goal: Optional[str] = Field(None, description="Goal or description of the conversation")
+    brevity: str = Field(
+        default="low",
+        description="Response brevity level: low, medium, or high"
+    )
+    agents_involved: Optional[List[str]] = Field(
+        default=None,
+        description="List of agent IDs involved in this conversation (None = all agents)"
+    )
     starting_agent: str = Field(..., description="ID of agent that starts the conversation")
     max_cycles: int = Field(
         default=10,
@@ -104,6 +118,45 @@ class ConversationConfig(BaseModel):
     termination_conditions: Optional[TerminationConditions] = Field(
         default_factory=TerminationConditions,
         description="Conditions for ending conversation"
+    )
+
+    @field_validator("brevity")
+    @classmethod
+    def validate_brevity(cls, v: str) -> str:
+        """Validate brevity level."""
+        if v.lower() not in ["low", "medium", "high"]:
+            raise ValueError("Brevity must be 'low', 'medium', or 'high'")
+        return v.lower()
+
+
+class ConversationConfig(BaseModel):
+    """Configuration for conversation orchestration (legacy single conversation)."""
+    starting_agent: str = Field(..., description="ID of agent that starts the conversation")
+    max_cycles: int = Field(
+        default=10,
+        ge=1,
+        description="Maximum number of conversation cycles"
+    )
+    turn_timeout: int = Field(
+        default=300,
+        ge=1,
+        description="Timeout in seconds for each agent turn"
+    )
+    termination_conditions: Optional[TerminationConditions] = Field(
+        default_factory=TerminationConditions,
+        description="Conditions for ending conversation"
+    )
+    goal: Optional[str] = Field(
+        default=None,
+        description="Goal or description of the conversation"
+    )
+    brevity: str = Field(
+        default="low",
+        description="Response brevity level: low, medium, or high"
+    )
+    agents_involved: Optional[List[str]] = Field(
+        default=None,
+        description="List of agent IDs involved in this conversation (None = all agents)"
     )
 
 
@@ -147,7 +200,14 @@ class RootConfig(BaseModel):
         default_factory=dict,
         description="Arbitrary metadata"
     )
-    conversation: ConversationConfig = Field(..., description="Conversation settings")
+    conversation: Optional[ConversationConfig] = Field(
+        None,
+        description="Legacy single conversation settings (deprecated, use conversations instead)"
+    )
+    conversations: Optional[List[ConversationScenario]] = Field(
+        None,
+        description="List of conversation scenarios to choose from"
+    )
     agents: Dict[str, AgentConfig] = Field(
         ...,
         description="Agent configurations keyed by agent ID"
@@ -164,6 +224,56 @@ class RootConfig(BaseModel):
         default_factory=LoggingConfig,
         description="Logging configuration"
     )
+    
+    @model_validator(mode='after')
+    def validate_conversation_config(self) -> 'RootConfig':
+        """Validate that at least one of conversation or conversations is provided."""
+        if not self.conversation and not self.conversations:
+            raise ValueError("Either 'conversation' or 'conversations' must be provided")
+        return self
+    
+    def get_conversation_config(self, scenario_name: Optional[str] = None) -> ConversationConfig:
+        """Get conversation config, either from scenarios or legacy single conversation.
+        
+        Args:
+            scenario_name: Name of scenario to use, or None for first/default
+            
+        Returns:
+            ConversationConfig instance
+        """
+        if self.conversations:
+            if scenario_name:
+                # Find specific scenario
+                for scenario in self.conversations:
+                    if scenario.name == scenario_name:
+                        return self._scenario_to_config(scenario)
+                raise ValueError(f"Scenario '{scenario_name}' not found")
+            else:
+                # Use first scenario
+                return self._scenario_to_config(self.conversations[0])
+        elif self.conversation:
+            # Use legacy conversation
+            return self.conversation
+        else:
+            raise ValueError("No conversation or conversations configured")
+    
+    def _scenario_to_config(self, scenario: ConversationScenario) -> ConversationConfig:
+        """Convert a scenario to a ConversationConfig."""
+        return ConversationConfig(
+            starting_agent=scenario.starting_agent,
+            max_cycles=scenario.max_cycles,
+            turn_timeout=scenario.turn_timeout,
+            termination_conditions=scenario.termination_conditions or TerminationConditions(),
+            goal=scenario.goal,
+            brevity=scenario.brevity,
+            agents_involved=scenario.agents_involved
+        )
+    
+    def list_scenarios(self) -> List[str]:
+        """Get list of available scenario names."""
+        if self.conversations:
+            return [s.name for s in self.conversations]
+        return []
 
     @field_validator("agents")
     @classmethod
@@ -173,9 +283,33 @@ class RootConfig(BaseModel):
             raise ValueError("At least two agents must be configured")
         return v
 
-    def validate_starting_agent(self) -> None:
-        """Validate that starting_agent exists in agents."""
-        if self.conversation.starting_agent not in self.agents:
-            raise ValueError(
-                f"Starting agent '{self.conversation.starting_agent}' not found in agents"
-            )
+    def validate_starting_agent(self, scenario_name: Optional[str] = None) -> None:
+        """Validate that starting_agent exists in agents for given scenario or default conversation.
+        
+        Args:
+            scenario_name: Name of scenario to validate, or None for first/default
+        """
+        if self.conversations:
+            scenarios_to_check = self.conversations if not scenario_name else [
+                s for s in self.conversations if s.name == scenario_name
+            ]
+            for scenario in scenarios_to_check:
+                if scenario.starting_agent not in self.agents:
+                    raise ValueError(
+                        f"Starting agent '{scenario.starting_agent}' in scenario '{scenario.name}' not found in agents"
+                    )
+                # Validate agents_involved if specified
+                if scenario.agents_involved:
+                    for agent_id in scenario.agents_involved:
+                        if agent_id not in self.agents:
+                            raise ValueError(
+                                f"Agent '{agent_id}' in scenario '{scenario.name}' not found in agents"
+                            )
+        elif self.conversation:
+            if self.conversation.starting_agent not in self.agents:
+                raise ValueError(
+                    f"Starting agent '{self.conversation.starting_agent}' not found in agents"
+                )
+        else:
+            # This should have been caught by model validator, but be defensive
+            raise ValueError("No conversation or conversations configured")
