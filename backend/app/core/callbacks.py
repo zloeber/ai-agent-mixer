@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Callable
 from uuid import UUID
 
@@ -88,7 +89,7 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
             try:
                 await self.websocket_manager.broadcast({
                     "type": "llm_log",
-                    "timestamp": asyncio.get_event_loop().time(),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                     "level": "info",
                     "message": f"Starting LLM generation",
                     "agent_id": self.agent_id
@@ -167,7 +168,7 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
                 # Also broadcast as agent_thought for LLM log tab
                 await self.websocket_manager.broadcast({
                     "type": "agent_thought",
-                    "timestamp": asyncio.get_event_loop().time(),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                     "thought": token,
                     "agent_id": self.agent_id,
                     "agent_name": self.agent_id  # Could be enhanced with actual agent name
@@ -192,7 +193,7 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
             try:
                 await self.websocket_manager.broadcast({
                     "type": "llm_log",
-                    "timestamp": asyncio.get_event_loop().time(),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                     "level": "info",
                     "message": f"Completed generation: {len(self.response_buffer)} response tokens, {len(self.thought_buffer)} thought tokens",
                     "agent_id": self.agent_id
@@ -213,7 +214,7 @@ class ThoughtSuppressingCallback(AsyncCallbackHandler):
             try:
                 await self.websocket_manager.broadcast({
                     "type": "llm_log",
-                    "timestamp": asyncio.get_event_loop().time(),
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
                     "level": "error",
                     "message": f"LLM error: {str(error)}",
                     "agent_id": self.agent_id

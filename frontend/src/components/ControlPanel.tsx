@@ -241,11 +241,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({ onConversationStart, onScen
     setIsTerminated(false);
     setConversationStarted(false);
     
-    // Broadcast clear event to other components
-    websocketService.subscribe('clear', () => {});
-    
-    // Trigger a synthetic event for components to clear their state
-    // We'll use a custom event
+    // Trigger a custom event for components to clear their state
     window.dispatchEvent(new CustomEvent('clearConversation'));
   };
 

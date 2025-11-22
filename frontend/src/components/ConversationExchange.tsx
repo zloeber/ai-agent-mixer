@@ -21,7 +21,6 @@ interface LogEntry {
 type TabType = 'conversation' | 'debug' | 'llm';
 
 let messageIdCounter = 0;
-let logIdCounter = 0;
 
 const AUTO_CONTINUE_DELAY_MS = 500; // Delay before auto-continuing conversation to ensure backend is ready
 
@@ -122,7 +121,7 @@ const ConversationExchange: React.FC = () => {
     // Subscribe to debug logs
     const unsubscribeDebug = websocketService.subscribe('debug_log', (data: any) => {
       const logEntry: LogEntry = {
-        id: `log-${++logIdCounter}-${Date.now()}`,
+        id: `log-${++messageIdCounter}-${Date.now()}`,
         timestamp: data.timestamp || new Date().toISOString(),
         level: data.level || 'debug',
         message: data.message,
@@ -134,7 +133,7 @@ const ConversationExchange: React.FC = () => {
     // Subscribe to LLM processing logs
     const unsubscribeLLM = websocketService.subscribe('llm_log', (data: any) => {
       const logEntry: LogEntry = {
-        id: `llm-${++logIdCounter}-${Date.now()}`,
+        id: `log-${++messageIdCounter}-${Date.now()}`,
         timestamp: data.timestamp || new Date().toISOString(),
         level: data.level || 'info',
         message: data.message,
@@ -146,7 +145,7 @@ const ConversationExchange: React.FC = () => {
     // Also capture agent thoughts as LLM logs
     const unsubscribeThought = websocketService.subscribe('agent_thought', (data: any) => {
       const logEntry: LogEntry = {
-        id: `thought-${++logIdCounter}-${Date.now()}`,
+        id: `log-${++messageIdCounter}-${Date.now()}`,
         timestamp: data.timestamp || new Date().toISOString(),
         level: 'info',
         message: `[${data.agent_name}] ${data.thought}`,
